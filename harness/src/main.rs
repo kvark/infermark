@@ -87,26 +87,47 @@ fn framework_meta(name: &str) -> (&'static str, &'static str, &'static str) {
     }
 }
 
-/// Format framework name as a markdown link to the repo at the pinned revision.
+/// Format framework name as a markdown link with backend.
+/// e.g. "[PyTorch 2.10.0](https://...releases/tag/v2.10.0) (ROCm 6.2)"
+/// e.g. "[Meganeura](https://...tree/550bb6c) (Vulkan)"
 fn framework_md_link(name: &str, extra: &serde_json::Map<String, serde_json::Value>) -> String {
     let (display, url, rev) = framework_meta(name);
     if url.is_empty() {
         return display.to_string();
     }
-    // For PyTorch, include version from the runner's extra fields.
-    if name == "pytorch" {
-        let ver = extra
-            .get("torch_version")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+
+    let link = if name == "pytorch" {
+        let ver = extra.get("torch_version").and_then(|v| v.as_str()).unwrap_or("");
         if !ver.is_empty() {
-            return format!("[{display} {ver}]({url})");
+            let base_ver = ver.split('+').next().unwrap_or(ver);
+            format!("[{display} {ver}]({url}/releases/tag/v{base_ver})")
+        } else {
+            format!("[{display}]({url})")
+        }
+    } else if rev.is_empty() {
+        format!("[{display}]({url})")
+    } else {
+        format!("[{display}]({url}/tree/{rev})")
+    };
+
+    // Append backend in parens if available.
+    let backend = extra.get("backend").and_then(|v| v.as_str()).unwrap_or("");
+    if !backend.is_empty() {
+        format!("{link} ({backend})")
+    } else {
+        // For Rust frameworks, infer backend from framework name.
+        let inferred = match name {
+            "burn" => "wgpu",
+            "luminal" => "CPU",
+            "meganeura" => "Vulkan",
+            _ => "",
+        };
+        if inferred.is_empty() {
+            link
+        } else {
+            format!("{link} ({inferred})")
         }
     }
-    if rev.is_empty() {
-        return format!("[{display}]({url})");
-    }
-    format!("[{display}]({url}/tree/{rev})")
 }
 
 fn project_root(cli_root: Option<&Path>) -> PathBuf {
@@ -323,10 +344,23 @@ fn print_table(outcomes: &[FrameworkOutcome], successes: &[&BenchResult]) {
         }
     }
 
-    println!("| Framework | Compile (s) | Forward (ms) | Backward (ms) | Loss |");
-    println!("|-----------|:-----------:|:------------:|:--------------:|:----:|");
+    println!("| Platform | Framework | Compile (s) | Forward (ms) | Backward (ms) | Loss |");
+    println!("|----------|-----------|:-----------:|:------------:|:--------------:|:----:|");
 
+    let mut platform_shown = false;
     for outcome in outcomes {
+        // Show platform (device name) only on the first row.
+        let platform = if !platform_shown {
+            if let FrameworkOutcome::Ok(r) = outcome {
+                platform_shown = true;
+                r.gpu_name.clone()
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+
         match outcome {
             FrameworkOutcome::Ok(r) => {
                 let link = framework_md_link(&r.framework, &r.extra);
@@ -358,20 +392,17 @@ fn print_table(outcomes: &[FrameworkOutcome], successes: &[&BenchResult]) {
                     format!("~~{:.2}~~", r.outputs.loss)
                 };
 
-                println!("| {link} | {compile} | {forward} | {backward} | {loss} |");
+                println!("| {platform} | {link} | {compile} | {forward} | {backward} | {loss} |");
             }
             FrameworkOutcome::Error { framework, .. } => {
-                let (display, url, rev) = framework_meta(framework);
-                let link = if !url.is_empty() && !rev.is_empty() {
-                    format!("[{display}]({url}/tree/{rev})")
-                } else {
-                    display.to_string()
-                };
-                println!("| {link} | ✗ | ✗ | ✗ | |");
+                let empty_extra = serde_json::Map::new();
+                let link = framework_md_link(framework, &empty_extra);
+                println!("| {platform} | {link} | ✗ | ✗ | ✗ | |");
             }
             FrameworkOutcome::Skipped { framework, .. } => {
-                let (display, ..) = framework_meta(framework);
-                println!("| {display} | — | — | — | |");
+                let empty_extra = serde_json::Map::new();
+                let link = framework_md_link(framework, &empty_extra);
+                println!("| {platform} | {link} | — | — | — | |");
             }
         }
     }
