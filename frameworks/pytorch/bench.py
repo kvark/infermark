@@ -459,13 +459,20 @@ def bench(model_name: str, spec: dict):
     compile_t0 = time.perf_counter()
     model = torch.compile(model)
 
-    # Force compilation with a dummy forward pass.
+    # Force compilation with a dummy forward+backward pass.
+    # Must run WITH gradients — compiling under no_grad() produces different
+    # code, causing a costly recompilation on the first grad-enabled forward.
     dummy_kwargs = prepare_inputs(model_type, model, dev)
-    with torch.no_grad():
-        if model_type == "sd_unet":
-            model(dummy_kwargs["noisy_latent"])
-        else:
-            model(**dummy_kwargs)
+    if model_type == "sd_unet":
+        dummy_out = model(dummy_kwargs["noisy_latent"])
+        F.mse_loss(dummy_out, dummy_kwargs["noise_target"]).backward()
+    elif model_type == "smolvla":
+        dummy_out = model(**dummy_kwargs)
+        F.mse_loss(dummy_out, torch.zeros_like(dummy_out)).backward()
+    else:
+        dummy_out = model(**dummy_kwargs)
+        dummy_out.loss.backward()
+    model.zero_grad()
     sync()
     compile_s = time.perf_counter() - compile_t0
     print(f"[pytorch] compiled in {compile_s:.2f}s", file=sys.stderr)

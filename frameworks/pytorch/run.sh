@@ -18,8 +18,9 @@ fi
 
 # Check torch is importable.
 if ! "$PYTHON" -c "import torch" 2>/dev/null; then
-    echo "[pytorch] torch not installed. Run: pip install torch transformers" >&2
-    echo "[pytorch] Or create a venv: python3 -m venv $SCRIPT_DIR/.venv && $SCRIPT_DIR/.venv/bin/pip install torch transformers" >&2
+    ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+    echo "[pytorch] torch not installed. Run: pip install -r $ROOT_DIR/requirements.txt" >&2
+    echo "[pytorch] Or create a venv: python3 -m venv .venv && .venv/bin/pip install -r $ROOT_DIR/requirements.txt" >&2
     exit 1
 fi
 
