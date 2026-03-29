@@ -29,4 +29,3 @@ title: Results
 {% include stablediffusion.md %}
 
 </div>
-
