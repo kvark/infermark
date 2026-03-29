@@ -139,6 +139,27 @@ def device_name(dev: str) -> str:
     return "cpu"
 
 
+def backend_name(dev: str) -> str:
+    """Return the GPU API backend name for the framework column."""
+    if dev.startswith("cuda"):
+        version = torch.version.cuda or ""
+        if torch.version.hip:
+            return f"ROCm {torch.version.hip}"
+        if version:
+            return f"CUDA {version}"
+        return "CUDA"
+    if dev == "mps":
+        return "MPS"
+    return "CPU"
+
+
+def torch_release_url(version: str) -> str:
+    """GitHub release URL for a PyTorch version."""
+    # Strip build metadata like +cu130 or +rocm6.2
+    base = version.split("+")[0]
+    return f"https://github.com/pytorch/pytorch/releases/tag/v{base}"
+
+
 def sha256_f32_tensor(t: torch.Tensor) -> str:
     flat = t.detach().float().cpu().contiguous().flatten()
     raw = struct.pack(f"<{flat.numel()}f", *flat.tolist())
@@ -288,10 +309,11 @@ def prepare_inputs(model_type: str, model, dev: str, seq_len: int = 128):
 def bench(model_name: str, spec: dict):
     dev = detect_device()
     dev_name = device_name(dev)
+    backend = backend_name(dev)
     model_type = spec["type"]
     torch.set_float32_matmul_precision("high")
 
-    print(f"[pytorch] device: {dev_name} ({dev}), torch {torch.__version__}", file=sys.stderr)
+    print(f"[pytorch] device: {dev_name} ({dev}), backend: {backend}, torch {torch.__version__}", file=sys.stderr)
 
     # --- Load model ---
     print(f"[pytorch] loading {spec['hf_id']}...", file=sys.stderr)
@@ -355,6 +377,7 @@ def bench(model_name: str, spec: dict):
         "device": dev_name,
         "gpu_name": dev_name,
         "torch_version": torch.__version__,
+        "backend": backend,
         "timings": {
             "compile_s": round(compile_s, 2),
             "forward_ms": round(forward_ms, 3),

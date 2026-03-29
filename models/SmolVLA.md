@@ -12,10 +12,10 @@ permalink: /models/SmolVLA
 
 Benchmark config: chunk_size=50, vlm_seq_len=16, float32, random weights, MSE loss.
 
-| CPU / GPU | Framework | Compile (s) | Forward (ms) | Backward (ms) | Loss |
-|-----------|-----------|:-----------:|:------------:|:--------------:|:----:|
-| Intel Xeon @ 2.10GHz | [PyTorch 2.11.0+cu130](https://github.com/pytorch/pytorch) | 36.0 | 15410 | 7660 | 0.00 |
-| Intel Xeon @ 2.10GHz (Lavapipe) | [Meganeura](https://github.com/kvark/meganeura/tree/550bb6c) | **0.16** | **805** | **3948** | 0.00 |
+| Platform | Framework | Compile (s) | Forward (ms) | Backward (ms) | Loss |
+|----------|-----------|:-----------:|:------------:|:--------------:|:----:|
+| Intel Xeon @ 2.10GHz | [PyTorch 2.11.0+cu130](https://github.com/pytorch/pytorch/releases/tag/v2.11.0) (CPU) | 37.26 | 15475 | 8184 | 0.00 |
+| | [Meganeura](https://github.com/kvark/meganeura/tree/550bb6c) (Vulkan) | **0.16** | **903** | **4280** | 0.00 |
 | | [Burn](https://github.com/tracel-ai/burn/tree/ed72d2b) | ✗ | ✗ | ✗ | |
 | | [Luminal](https://github.com/luminal-ai/luminal/tree/f32161d) | ✗ | ✗ | ✗ | |
 
