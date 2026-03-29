@@ -8,11 +8,12 @@
     <script src="{{ '/assets/js/scale.fix.js' | relative_url }}"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <style>
-      /* Wider content area for tables */
-      .wrapper { max-width: 1100px; }
-      section { width: auto; max-width: none; }
-      /* Tab styling */
-      .tabs { display: flex; gap: 0; border-bottom: 2px solid #b5e853; margin: 1em 0 0 0; }
+      /* Widen layout for benchmark tables */
+      .wrapper { width: 1200px; max-width: 95vw; }
+      section { width: 960px; max-width: calc(100% - 200px); }
+
+      /* Tabs */
+      .tabs { display: flex; gap: 0; border-bottom: 2px solid #b5e853; margin: 0 0 0 0; }
       .tabs input[type="radio"] { display: none; }
       .tabs label {
         padding: 8px 20px; cursor: pointer; font-weight: bold;
@@ -23,22 +24,39 @@
       .tabs input[type="radio"]:checked + label {
         background: #fff; border-color: #b5e853; color: #222;
       }
-      .tab-panel { display: none; padding: 1em 0; }
+      .tab-panel { display: none; padding: 0.5em 0; }
       .tab-panel.active { display: block; }
-      /* Table readability */
-      table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
-      th { background: #f5f5f5; }
-      td, th { padding: 5px 8px; border: 1px solid #ddd; }
+
+      /* Table sizing */
+      table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+      th { background: #f5f5f5; white-space: nowrap; }
+      td, th { padding: 4px 8px; border: 1px solid #ddd; }
+
+      /* Legend in sidebar */
+      .legend { font-size: 0.8em; color: #888; margin-top: 2em; line-height: 1.6; }
+      .legend dt { font-weight: bold; }
+      .legend dd { margin: 0 0 0.3em 0; }
     </style>
   </head>
   <body>
     <div class="wrapper">
       <header>
-        <h1 class="header">{{ site.title | default: site.github.repository_name }}</h1>
+        <h1 class="header"><a href="{{ site.baseurl }}/">{{ site.title | default: site.github.repository_name }}</a></h1>
         <p class="header">{{ site.description | default: site.github.project_tagline }}</p>
+
         <ul>
           <li><a class="buttons github" href="https://github.com/kvark/infermark">View On GitHub</a></li>
         </ul>
+
+        <dl class="legend">
+          <dt>Bold</dt>
+          <dd>Best among matching frameworks</dd>
+          <dt><s>Struck through</s></dt>
+          <dd>Different / simplified model</dd>
+          <dt>✗</dt>
+          <dd>Not supported</dd>
+        </dl>
+        <p class="legend">Framework names link to the tested git revision.</p>
       </header>
 
       <section>

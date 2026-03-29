@@ -24,11 +24,5 @@ title: Results
 
 ---
 
-**Legend:**
-**Bold** = best among matching frameworks.
-~~Struck through~~ = different/simplified model.
-**✗** = not supported.
-Framework names link to the tested git revision.
-
 **Run it yourself:**
 `git clone https://github.com/kvark/infermark && cd infermark && ./run.sh`
