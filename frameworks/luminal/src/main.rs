@@ -252,6 +252,7 @@ fn main() {
 
     let result = serde_json::json!({
         "framework": "luminal",
+        "framework_rev": std::env::var("FRAMEWORK_REV").unwrap_or_default(),
         "model": model_name,
         "device": "cpu",
         "gpu_name": "cpu",

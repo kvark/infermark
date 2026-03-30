@@ -76,6 +76,7 @@ fn emit_result(
 
     let result = serde_json::json!({
         "framework": "candle",
+        "framework_rev": std::env::var("FRAMEWORK_REV").unwrap_or_default(),
         "model": model_name,
         "device": "Cpu",
         "gpu_name": "cpu",

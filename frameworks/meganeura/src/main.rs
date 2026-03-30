@@ -261,8 +261,11 @@ fn emit_result(
     let hash = sha256_f32(output);
     let sample: Vec<f64> = output.iter().take(16).map(|&v| v as f64).collect();
 
+    let rev = std::env::var("FRAMEWORK_REV").unwrap_or_default();
+
     let result = serde_json::json!({
         "framework": "meganeura",
+        "framework_rev": rev,
         "model": model,
         "device": "blade-gpu",
         "gpu_name": "blade-gpu",

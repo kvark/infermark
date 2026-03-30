@@ -7,6 +7,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 MODEL="${1:-SmolLM2-135M}"
 
+source "$ROOT_DIR/scripts/cargo-rev.sh"
+export FRAMEWORK_REV=$(cargo_rev_short luminal "$ROOT_DIR")
+
 echo "[luminal] Building release binary..." >&2
 cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml" -p infermark-luminal 2>&1 >&2
 
