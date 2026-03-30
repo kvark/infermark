@@ -15,6 +15,9 @@ if [ -z "${WGPU_BACKEND:-}" ]; then
     esac
 fi
 
+source "$ROOT_DIR/scripts/cargo-rev.sh"
+export FRAMEWORK_REV=$(cargo_rev_short burn "$ROOT_DIR")
+
 echo "[burn] Building release binary..." >&2
 cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml" -p infermark-burn 2>&1 >&2
 

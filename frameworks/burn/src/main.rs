@@ -227,6 +227,7 @@ fn main() {
 
     let result = serde_json::json!({
         "framework": "burn",
+        "framework_rev": std::env::var("FRAMEWORK_REV").unwrap_or_default(),
         "model": model_name,
         "device": format!("{:?}", device),
         "gpu_name": format!("{:?}", device),

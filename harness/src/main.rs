@@ -90,45 +90,32 @@ const ALL_FRAMEWORKS: &[&str] = &[
     "llama-cpp",
 ];
 
-/// Framework metadata: (display_name, repo_url, git_rev).
-/// Git revisions are extracted from the workspace Cargo.toml at build time
-/// by build.rs — single source of truth, no manual sync needed.
-fn framework_meta(name: &str) -> (&'static str, &'static str, &'static str) {
+/// Framework metadata: (display_name, repo_url).
+fn framework_meta(name: &str) -> (&'static str, &'static str) {
     match name {
-        "pytorch" => ("PyTorch", "https://github.com/pytorch/pytorch", ""),
-        "candle" => (
-            "Candle",
-            "https://github.com/huggingface/candle",
-            env!("CANDLE_REV"),
-        ),
-        "burn" => (
-            "Burn",
-            "https://github.com/tracel-ai/burn",
-            env!("BURN_REV"),
-        ),
-        "luminal" => (
-            "Luminal",
-            "https://github.com/luminal-ai/luminal",
-            env!("LUMINAL_REV"),
-        ),
-        "meganeura" => (
-            "Meganeura",
-            "https://github.com/kvark/meganeura",
-            env!("MEGANEURA_REV"),
-        ),
-        "llama-cpp" => ("llama.cpp", "https://github.com/ggml-org/llama.cpp", ""),
-        _ => ("unknown", "", ""),
+        "pytorch" => ("PyTorch", "https://github.com/pytorch/pytorch"),
+        "candle" => ("Candle", "https://github.com/huggingface/candle"),
+        "burn" => ("Burn", "https://github.com/tracel-ai/burn"),
+        "luminal" => ("Luminal", "https://github.com/luminal-ai/luminal"),
+        "meganeura" => ("Meganeura", "https://github.com/kvark/meganeura"),
+        "llama-cpp" => ("llama.cpp", "https://github.com/ggml-org/llama.cpp"),
+        _ => ("unknown", ""),
     }
 }
 
 /// Format framework name as a markdown link with backend.
-/// e.g. "[PyTorch 2.10.0](https://...releases/tag/v2.10.0) (ROCm 6.2)"
-/// e.g. "[Meganeura](https://...tree/550bb6c) (Vulkan)"
+/// Revision comes from the runner's JSON output ("framework_rev" field),
+/// which each run.sh extracts from Cargo.lock.
 fn framework_md_link(name: &str, extra: &serde_json::Map<String, serde_json::Value>) -> String {
-    let (display, url, rev) = framework_meta(name);
+    let (display, url) = framework_meta(name);
     if url.is_empty() {
         return display.to_string();
     }
+
+    let rev = extra
+        .get("framework_rev")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     let link = if name == "pytorch" {
         let ver = extra
