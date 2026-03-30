@@ -18,12 +18,18 @@ Benchmark config: chunk_size=50, vlm_seq_len=16, float32, random weights, MSE lo
 | | [Meganeura](https://github.com/kvark/meganeura/tree/c43315d) (Vulkan) | **0.16** | **903** | **4280** | 0.00 |
 | | [Burn](https://github.com/tracel-ai/burn/tree/ed72d2b) | ✗ | ✗ | ✗ | |
 | | [Luminal](https://github.com/luminal-ai/luminal/tree/f32161d) | ✗ | ✗ | ✗ | |
-| AMD Radeon 890M Graphics | [PyTorch 2.10.0](https://github.com/pytorch/pytorch/releases/tag/v2.10.0) (ROCm 7.2.53210) | 20.10 | 25 | **43** | 0.00 |
-|  | [Candle](https://github.com/huggingface/candle/tree/6b4d8a1) (CPU) | ✗ | ✗ | ✗ | |
-|  | [Burn](https://github.com/tracel-ai/burn/tree/ed72d2b) (wgpu) | ✗ | ✗ | ✗ | |
-|  | [Luminal](https://github.com/luminal-ai/luminal/tree/f32161d) (CPU) | ✗ | ✗ | ✗ | |
-|  | [Meganeura](https://github.com/kvark/meganeura/tree/c43315d) (Vulkan) | **0.34** | **20** | 47 | 0.00 |
-|  | [llama.cpp](https://github.com/ggml-org/llama.cpp) (CPU) | ✗ | ✗ | ✗ | |
+| AMD Radeon 890M Graphics | [PyTorch 2.10.0](https://github.com/pytorch/pytorch/releases/tag/v2.10.0) (ROCm 7.2.53210) | 18.97 | 25 | 38 | 0.00 |
+|  | [MLX](https://github.com/ml-explore/mlx) (MLX) | ✗ | ✗ | ✗ | |
+|  | [Candle](https://github.com/huggingface/candle) (CPU) | ✗ | ✗ | ✗ | |
+|  | [Burn](https://github.com/tracel-ai/burn) (wgpu) | ✗ | ✗ | ✗ | |
+|  | [Luminal](https://github.com/luminal-ai/luminal) (CPU) | ✗ | ✗ | ✗ | |
+|  | [Meganeura](https://github.com/kvark/meganeura/tree/3d34aad) (Vulkan) | **0.46** | **18** | **34** | 0.01 |
+| Apple M3 | [PyTorch 2.11.0](https://github.com/pytorch/pytorch/releases/tag/v2.11.0) (MPS) | 0.00 | 199 | 136 | 0.00 |
+|  | [MLX](https://github.com/ml-explore/mlx) (MLX) | 0.00 | **14** | 105 | 0.00 |
+|  | [Candle](https://github.com/huggingface/candle) (CPU) | ✗ | ✗ | ✗ | |
+|  | [Burn](https://github.com/tracel-ai/burn) (wgpu) | ✗ | ✗ | ✗ | |
+|  | [Luminal](https://github.com/luminal-ai/luminal) (CPU) | ✗ | ✗ | ✗ | |
+|  | [Meganeura](https://github.com/kvark/meganeura) (Metal) | 0.59 | 53 | **32** | 0.01 |
 
 **Correctness:** PyTorch vs Meganeura: **CLOSE** (loss diff 1e-5, max error 4.6e-3).
 
