@@ -92,6 +92,7 @@ const ALL_FRAMEWORKS: &[&str] = &[
     "luminal",
     "meganeura",
     "llama-cpp",
+    "onnxruntime",
 ];
 
 /// Framework metadata: (display_name, repo_url).
@@ -104,6 +105,7 @@ fn framework_meta(name: &str) -> (&'static str, &'static str) {
         "luminal" => ("Luminal", "https://github.com/luminal-ai/luminal"),
         "meganeura" => ("Meganeura", "https://github.com/kvark/meganeura"),
         "llama-cpp" => ("llama.cpp", "https://github.com/ggml-org/llama.cpp"),
+        "onnxruntime" => ("ONNX Runtime", "https://github.com/microsoft/onnxruntime"),
         _ => ("unknown", ""),
     }
 }
@@ -158,6 +160,7 @@ fn framework_md_link(name: &str, extra: &serde_json::Map<String, serde_json::Val
             }
             "mlx" => "MLX",
             "llama-cpp" => "CPU",
+            "onnxruntime" => "CPU",
             _ => "",
         };
         if inferred.is_empty() {
