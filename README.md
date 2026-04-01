@@ -21,12 +21,14 @@ links in the results tables always point to the exact revision tested.
 | [Luminal](https://github.com/luminal-ai/luminal) | Rust | CUDA / Metal / CPU |
 | [Meganeura](https://github.com/kvark/meganeura) | Rust | blade (Vulkan / Metal) |
 | [llama.cpp](https://github.com/ggml-org/llama.cpp) | C++ | CUDA / Metal / Vulkan / CPU |
+| [ONNX Runtime](https://github.com/microsoft/onnxruntime) | Python/C++ | CUDA / TensorRT / DirectML / CPU |
 
 ## Platform support
 
 | Framework | Linux | macOS | Windows |
 |-----------|:-----:|:-----:|:-------:|
 | PyTorch | CUDA, ROCm, CPU | MPS, CPU | CPU |
+| ONNX Runtime | CUDA, TensorRT, CPU | CoreML, CPU | DirectML, CPU |
 | Candle | CUDA, CPU | Metal, CPU | CPU |
 | Burn | Vulkan, CPU | Metal, CPU | — |
 | Luminal | CUDA, CPU | Metal, CPU | — |
