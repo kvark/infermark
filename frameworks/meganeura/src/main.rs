@@ -54,6 +54,77 @@ fn name_seed(name: &str) -> f32 {
     (h % 10000) as f32
 }
 
+fn load_weights(
+    session: &mut meganeura::Session,
+    model: &SafeTensorsModel,
+    transposed_set: &std::collections::HashSet<&str>,
+) {
+    for (name, _) in session.plan().param_buffers.clone() {
+        // Skip derived (fused) params — auto-populated when source params are loaded.
+        if !model.tensor_info().contains_key(&name) && name != "lm_head.weight" {
+            continue;
+        }
+        if name == "lm_head.weight" {
+            if model.tensor_info().contains_key("lm_head.weight") {
+                let data = if transposed_set.contains(name.as_str()) {
+                    model.tensor_f32_auto_transposed(&name)
+                } else {
+                    model.tensor_f32_auto(&name)
+                };
+                session.set_parameter(&name, &data.unwrap());
+            } else {
+                let data = model
+                    .tensor_f32_auto_transposed("model.embed_tokens.weight")
+                    .unwrap();
+                session.set_parameter("lm_head.weight", &data);
+            }
+        } else if transposed_set.contains(name.as_str()) {
+            let data = model.tensor_f32_auto_transposed(&name).unwrap();
+            session.set_parameter(&name, &data);
+        } else {
+            let data = model.tensor_f32_auto(&name).unwrap();
+            session.set_parameter(&name, &data);
+        }
+    }
+}
+
+fn compute_grad_norm(session: &meganeura::Session) -> f64 {
+    let plan = session.plan();
+    let num_buffers = plan.buffers.len();
+    let mut norm_sq = 0.0f64;
+    let mut total_params = 0usize;
+    let mut param_norms: Vec<(String, f64, usize)> = Vec::new();
+    for (name, buf_ref) in plan.param_buffers.iter() {
+        let grad_pair = plan.param_grad_pairs.iter().find(|&&(p, _)| p == *buf_ref);
+        let grad_buf = match grad_pair {
+            Some(&(_, g)) => g,
+            None => continue,
+        };
+        if buf_ref.0 as usize >= num_buffers || grad_buf.0 as usize >= num_buffers {
+            continue;
+        }
+        let n = plan.buffers[buf_ref.0 as usize] / 4;
+        let grad_size = plan.buffers[grad_buf.0 as usize] / 4;
+        if n != grad_size {
+            continue;
+        }
+        let mut grad = vec![0.0f32; n];
+        session.read_param_grad(name, &mut grad);
+        let param_sq: f64 = grad.iter().map(|&v| (v as f64) * (v as f64)).sum();
+        norm_sq += param_sq;
+        total_params += 1;
+        param_norms.push((name.clone(), param_sq.sqrt(), n));
+    }
+    let grad_norm = norm_sq.sqrt();
+    eprintln!("[meganeura] grad_norm={grad_norm:.6} ({total_params} params with gradients)");
+    param_norms.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    eprintln!("[meganeura] top gradient norms:");
+    for (name, norm, n) in param_norms.iter().take(10) {
+        eprintln!("  {name}: {norm:.6} ({n} params)");
+    }
+    grad_norm
+}
+
 fn bench_smollm2(model_name: &str) {
     use meganeura::models::smollm2::{self, SmolLM2Config};
 
@@ -87,37 +158,18 @@ fn bench_smollm2(model_name: &str) {
     eprintln!("[meganeura] compiling...");
     let mut session = build_inference_session(&g);
 
+    // Also build training graph for grad_norm validation.
+    eprintln!("[meganeura] building training graph...");
+    let training_g = smollm2::build_training_graph(&config, seq_len);
+    eprintln!("[meganeura] compiling training session...");
+    let mut train_session = build_session(&training_g);
+
     // --- Load weights ---
     let transposed = smollm2::transposed_weight_names(&config);
     let transposed_set: std::collections::HashSet<&str> =
         transposed.iter().map(|s| s.as_str()).collect();
-    for (name, _) in session.plan().param_buffers.clone() {
-        // Skip derived (fused) params — auto-populated when source params are loaded.
-        if !model.tensor_info().contains_key(&name) && name != "lm_head.weight" {
-            continue;
-        }
-        if name == "lm_head.weight" {
-            if model.tensor_info().contains_key("lm_head.weight") {
-                let data = if transposed_set.contains(name.as_str()) {
-                    model.tensor_f32_auto_transposed(&name)
-                } else {
-                    model.tensor_f32_auto(&name)
-                };
-                session.set_parameter(&name, &data.unwrap());
-            } else {
-                let data = model
-                    .tensor_f32_auto_transposed("model.embed_tokens.weight")
-                    .unwrap();
-                session.set_parameter("lm_head.weight", &data);
-            }
-        } else if transposed_set.contains(name.as_str()) {
-            let data = model.tensor_f32_auto_transposed(&name).unwrap();
-            session.set_parameter(&name, &data);
-        } else {
-            let data = model.tensor_f32_auto(&name).unwrap();
-            session.set_parameter(&name, &data);
-        }
-    }
+    load_weights(&mut session, &model, &transposed_set);
+    load_weights(&mut train_session, &model, &transposed_set);
 
     let compile_s = compile_start.elapsed().as_secs_f64();
     eprintln!("[meganeura] ready (compile: {compile_s:.2}s)");
@@ -149,6 +201,33 @@ fn bench_smollm2(model_name: &str) {
     }
     let loss = total_loss / loss_positions as f64;
 
+    // --- Training step (forward + backward) ---
+    // HF-shifted labels: position p predicts labels[p+1] (the next token).
+    // Last position has no target (zero label row).
+    // Scale by seq_len/(seq_len-1) to compensate for meganeura dividing by seq_len
+    // while HF divides by seq_len-1.
+    let label_scale = seq_len as f32 / (seq_len - 1) as f32;
+    let mut one_hot_labels = vec![0.0f32; seq_len * vocab];
+    for pos in 0..seq_len - 1 {
+        let target = labels[pos + 1] as usize;
+        one_hot_labels[pos * vocab + target] = label_scale;
+    }
+    train_session.set_input_u32("token_ids", &input_ids);
+    train_session.set_input("labels", &one_hot_labels);
+    let bwd_start = Instant::now();
+    train_session.step();
+    train_session.wait();
+    let train_ms = bwd_start.elapsed().as_secs_f64() * 1000.0;
+    let backward_ms = (train_ms - forward_ms).max(0.0);
+
+    let grad_norm = compute_grad_norm(&train_session);
+    if !grad_norm.is_finite() || grad_norm > 1e6 {
+        eprintln!(
+            "[meganeura] WARNING: grad_norm={grad_norm:.1} is suspiciously large — \
+             possible GPU driver issue (see https://github.com/kvark/meganeura/issues/TBD)"
+        );
+    }
+
     // --- Latency (single-token forward) ---
     // Build a separate seq_len=1 inference graph.
     eprintln!("[meganeura] measuring single-token latency...");
@@ -157,32 +236,7 @@ fn bench_smollm2(model_name: &str) {
     lat_g.set_outputs(vec![lat_logits]);
     let mut lat_session = build_inference_session(&lat_g);
     // Copy weights from main session.
-    for (name, _) in lat_session.plan().param_buffers.clone() {
-        if !model.tensor_info().contains_key(&name) && name != "lm_head.weight" {
-            continue;
-        }
-        if name == "lm_head.weight" {
-            if model.tensor_info().contains_key("lm_head.weight") {
-                let data = if transposed_set.contains(name.as_str()) {
-                    model.tensor_f32_auto_transposed(&name)
-                } else {
-                    model.tensor_f32_auto(&name)
-                };
-                lat_session.set_parameter(&name, &data.unwrap());
-            } else {
-                let data = model
-                    .tensor_f32_auto_transposed("model.embed_tokens.weight")
-                    .unwrap();
-                lat_session.set_parameter("lm_head.weight", &data);
-            }
-        } else if transposed_set.contains(name.as_str()) {
-            let data = model.tensor_f32_auto_transposed(&name).unwrap();
-            lat_session.set_parameter(&name, &data);
-        } else {
-            let data = model.tensor_f32_auto(&name).unwrap();
-            lat_session.set_parameter(&name, &data);
-        }
-    }
+    load_weights(&mut lat_session, &model, &transposed_set);
     // Warm-up.
     lat_session.set_input_u32("token_ids", &[0u32]);
     lat_session.step();
@@ -194,13 +248,6 @@ fn bench_smollm2(model_name: &str) {
     lat_session.wait();
     let latency_ms = lat_start.elapsed().as_secs_f64() * 1000.0;
 
-    // Backward (re-run forward as proxy).
-    session.set_input_u32("token_ids", &input_ids);
-    let bwd_start = Instant::now();
-    session.step();
-    session.wait();
-    let backward_ms = bwd_start.elapsed().as_secs_f64() * 1000.0;
-
     emit_result(
         model_name,
         compile_s,
@@ -209,6 +256,7 @@ fn bench_smollm2(model_name: &str) {
         &all_logits,
         loss,
         latency_ms,
+        grad_norm,
     );
 }
 
@@ -365,6 +413,8 @@ fn bench_smolvla() {
     lat_session.wait();
     let latency_ms = lat_start.elapsed().as_secs_f64() * 1000.0;
 
+    let grad_norm = compute_grad_norm(&train_session);
+
     emit_result(
         "SmolVLA",
         compile_s,
@@ -373,6 +423,7 @@ fn bench_smolvla() {
         &output,
         loss,
         latency_ms,
+        grad_norm,
     );
 }
 
@@ -394,6 +445,7 @@ fn emit_result(
     output: &[f32],
     loss: f64,
     latency_ms: f64,
+    grad_norm: f64,
 ) {
     let hash = sha256_f32(output);
     let sample: Vec<f64> = output.iter().take(16).map(|&v| v as f64).collect();
@@ -418,6 +470,7 @@ fn emit_result(
             "logits_hash": hash,
             "logits_sample": sample,
             "loss": if loss.is_nan() { -1.0 } else { (loss * 1_000_000.0).round() / 1_000_000.0 },
+            "grad_norm": if grad_norm.is_nan() { -1.0 } else { (grad_norm * 1_000_000.0).round() / 1_000_000.0 },
         },
     });
 
@@ -509,6 +562,8 @@ fn bench_stable_diffusion() {
     infer_session.wait();
     let latency_ms = lat_start.elapsed().as_secs_f64() * 1000.0;
 
+    let grad_norm = compute_grad_norm(&train_session);
+
     emit_result(
         "StableDiffusion",
         compile_s,
@@ -517,6 +572,7 @@ fn bench_stable_diffusion() {
         &logits_data,
         loss_val,
         latency_ms,
+        grad_norm,
     );
 }
 
@@ -637,6 +693,7 @@ fn bench_resnet() {
         &output,
         loss,
         latency_ms,
+        0.0,
     );
 }
 
@@ -746,6 +803,7 @@ fn bench_whisper() {
         &output,
         loss,
         latency_ms,
+        0.0,
     );
 }
 
