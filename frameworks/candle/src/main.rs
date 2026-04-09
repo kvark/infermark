@@ -1,13 +1,47 @@
 //! Candle framework benchmark runner for inferena.
 //!
-//! Uses candle-transformers' LLaMA implementation with random-init weights
-//! on CPU. Candle supports CUDA and Metal but we default to CPU here.
+//! Uses candle-transformers' LLaMA implementation with random-init weights.
+//! Supports CPU, CUDA (--features cuda), and Metal (--features metal).
 
 use candle_core::{DType, Device, Module, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::llama as llama_model;
 use sha2::{Digest, Sha256};
 use std::time::Instant;
+
+/// Select the best available device based on compile-time features.
+fn select_device() -> Device {
+    #[cfg(feature = "cuda")]
+    {
+        if let Ok(dev) = Device::new_cuda(0) {
+            eprintln!("[candle] using CUDA device");
+            return dev;
+        }
+        eprintln!("[candle] CUDA requested but unavailable, falling back to CPU");
+    }
+    #[cfg(feature = "metal")]
+    {
+        if let Ok(dev) = Device::new_metal(0) {
+            eprintln!("[candle] using Metal device");
+            return dev;
+        }
+        eprintln!("[candle] Metal requested but unavailable, falling back to CPU");
+    }
+    Device::Cpu
+}
+
+/// Return (device_str, backend_str) for JSON output.
+fn device_label(device: &Device) -> (&'static str, &'static str) {
+    match device {
+        Device::Cpu => ("Cpu", "CPU"),
+        #[cfg(feature = "cuda")]
+        Device::Cuda(_) => ("Cuda", "CUDA"),
+        #[cfg(feature = "metal")]
+        Device::Metal(_) => ("Metal", "Metal"),
+        #[allow(unreachable_patterns)]
+        _ => ("Cpu", "CPU"),
+    }
+}
 
 fn smollm2_config() -> llama_model::Config {
     llama_model::Config {
@@ -63,8 +97,10 @@ fn find_model_path(model_name: &str) -> Option<std::path::PathBuf> {
     None
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_result(
     model_name: &str,
+    device: &Device,
     compile_s: f64,
     forward_ms: f64,
     latency_ms: f64,
@@ -74,13 +110,15 @@ fn emit_result(
 ) {
     let logits_hash = sha256_f32(logits_data);
     let logits_sample: Vec<f64> = logits_data.iter().take(16).map(|&v| v as f64).collect();
+    let (device_str, backend_str) = device_label(device);
 
     let result = serde_json::json!({
         "framework": "candle",
         "framework_rev": std::env::var("FRAMEWORK_REV").unwrap_or_default(),
         "model": model_name,
-        "device": "Cpu",
-        "gpu_name": "cpu",
+        "device": device_str,
+        "gpu_name": device_str.to_lowercase(),
+        "backend": backend_str,
         "timings": {
             "compile_s": (compile_s * 100.0).round() / 100.0,
             "inference_ms": (forward_ms * 1000.0).round() / 1000.0,
@@ -99,7 +137,7 @@ fn emit_result(
 
 fn bench_smollm2(model_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     let config = smollm2_config();
-    let device = Device::Cpu;
+    let device = select_device();
     let dtype = DType::F32;
     let seq_len: usize = 128;
 
@@ -156,6 +194,7 @@ fn bench_smollm2(model_name: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     emit_result(
         model_name,
+        &device,
         compile_s,
         forward_ms,
         latency_ms,
@@ -171,7 +210,7 @@ fn bench_stable_diffusion() -> Result<(), Box<dyn std::error::Error>> {
         BlockConfig, UNet2DConditionModel, UNet2DConditionModelConfig,
     };
 
-    let device = Device::Cpu;
+    let device = select_device();
     let dtype = DType::F32;
 
     // SD 1.5 UNet configuration (matches HF runwayml/stable-diffusion-v1-5).
@@ -259,6 +298,7 @@ fn bench_stable_diffusion() -> Result<(), Box<dyn std::error::Error>> {
 
     emit_result(
         "StableDiffusion",
+        &device,
         compile_s,
         forward_ms,
         0.0, // latency: not meaningful for non-autoregressive models
@@ -272,7 +312,7 @@ fn bench_stable_diffusion() -> Result<(), Box<dyn std::error::Error>> {
 fn bench_resnet() -> Result<(), Box<dyn std::error::Error>> {
     use candle_transformers::models::resnet;
 
-    let device = Device::Cpu;
+    let device = select_device();
     let dtype = DType::F32;
     let batch = 4usize;
 
@@ -313,6 +353,7 @@ fn bench_resnet() -> Result<(), Box<dyn std::error::Error>> {
 
     emit_result(
         "ResNet-50",
+        &device,
         compile_s,
         forward_ms,
         latency_ms,
@@ -326,7 +367,7 @@ fn bench_resnet() -> Result<(), Box<dyn std::error::Error>> {
 fn bench_whisper() -> Result<(), Box<dyn std::error::Error>> {
     use candle_transformers::models::whisper as whisper_mod;
 
-    let device = Device::Cpu;
+    let device = select_device();
     let dtype = DType::F32;
 
     // Whisper-tiny config.
@@ -386,6 +427,7 @@ fn bench_whisper() -> Result<(), Box<dyn std::error::Error>> {
 
     emit_result(
         "Whisper-tiny",
+        &device,
         compile_s,
         forward_ms,
         0.0,
