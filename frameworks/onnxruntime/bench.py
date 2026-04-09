@@ -331,6 +331,129 @@ def bench_whisper(model_name):
     emit(model_name, compile_s, inference_ms, 0.0, hidden_states, loss, sess)
 
 
+def _import_pytorch_model(cls_name):
+    """Import a model class from the PyTorch bench (used for ONNX export only)."""
+    import importlib.util
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    pytorch_bench = os.path.join(script_dir, "..", "pytorch", "bench.py")
+    spec = importlib.util.spec_from_file_location("pytorch_bench", pytorch_bench)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return getattr(mod, cls_name)
+
+
+def _name_seeded_init(model, scale=0.1):
+    """Deterministic init matching PyTorch bench's _deterministic_init."""
+    import torch
+    with torch.no_grad():
+        for name, p in model.named_parameters():
+            seed = _name_seed(name)
+            n = p.numel()
+            p.copy_(torch.sin(torch.arange(n, dtype=torch.float32) * 0.01 + seed).view_as(p) * scale)
+    model.eval()
+    return model
+
+
+def export_sd_unet_onnx(onnx_path):
+    """Export simplified SD U-Net to ONNX."""
+    import torch
+    SDUNet = _import_pytorch_model("SDUNet")
+    model = SDUNet(in_channels=4, base_channels=64, num_levels=3, num_groups=16, eps=1e-5)
+    model = _name_seeded_init(model)
+    dummy = torch.randn(2, 4, 32, 32)
+    os.makedirs(os.path.dirname(onnx_path), exist_ok=True)
+    torch.onnx.export(model, dummy, onnx_path, input_names=["noisy_latent"],
+                      output_names=["noise_pred"], opset_version=17, dynamo=False)
+
+
+def bench_sd(model_name):
+    import onnxruntime as ort
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(os.path.dirname(script_dir))
+    onnx_path = os.path.join(root_dir, "models", model_name, "sd_unet.onnx")
+
+    print("[onnxruntime] exporting SD U-Net to ONNX...", file=sys.stderr)
+    if os.path.isfile(onnx_path):
+        os.remove(onnx_path)
+    os.makedirs(os.path.dirname(onnx_path), exist_ok=True)
+
+    providers = _get_providers()
+    t0 = time.perf_counter()
+    export_sd_unet_onnx(onnx_path)
+    sess = ort.InferenceSession(onnx_path, providers=providers)
+    compile_s = time.perf_counter() - t0
+
+    # Match PyTorch bench inputs: batch=2, 4 channels, 32×32.
+    batch, in_c, res = 2, 4, 32
+    in_size = batch * in_c * res * res
+    noisy = np.sin(np.arange(in_size, dtype=np.float32) * 0.01).reshape(batch, in_c, res, res)
+
+    sess.run(None, {"noisy_latent": noisy})
+    t0 = time.perf_counter()
+    outputs = sess.run(None, {"noisy_latent": noisy})
+    inference_ms = (time.perf_counter() - t0) * 1000.0
+    pred = outputs[0]
+
+    # MSE loss against zeros (noise prediction target).
+    loss = float(np.mean(pred ** 2))
+
+    emit(model_name, compile_s, inference_ms, 0.0, pred, loss, sess)
+
+
+def export_smolvla_onnx(onnx_path):
+    """Export SmolVLA action expert to ONNX."""
+    import torch
+    ActionExpert = _import_pytorch_model("ActionExpert")
+    model = ActionExpert()
+    model = _name_seeded_init(model)
+    noisy_actions = torch.sin(torch.arange(50 * 32, dtype=torch.float32) * 0.01).view(1, 50, 32)
+    timestep = torch.sin(torch.arange(720 * 2, dtype=torch.float32) * 0.005).view(1, 1, 1440)
+    vlm_kv = torch.cos(torch.arange(16 * 320, dtype=torch.float32) * 0.01).view(1, 16, 320)
+    os.makedirs(os.path.dirname(onnx_path), exist_ok=True)
+    torch.onnx.export(
+        model, (noisy_actions, timestep, vlm_kv), onnx_path,
+        input_names=["noisy_actions", "timestep", "vlm_kv"],
+        output_names=["predicted_actions"], opset_version=17, dynamo=False,
+    )
+
+
+def bench_smolvla(model_name):
+    import onnxruntime as ort
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(os.path.dirname(script_dir))
+    onnx_path = os.path.join(root_dir, "models", model_name, "smolvla.onnx")
+
+    print("[onnxruntime] exporting SmolVLA to ONNX...", file=sys.stderr)
+    if os.path.isfile(onnx_path):
+        os.remove(onnx_path)
+    os.makedirs(os.path.dirname(onnx_path), exist_ok=True)
+
+    providers = _get_providers()
+    t0 = time.perf_counter()
+    export_smolvla_onnx(onnx_path)
+    sess = ort.InferenceSession(onnx_path, providers=providers)
+    compile_s = time.perf_counter() - t0
+
+    # Match PyTorch bench inputs.
+    noisy_actions = np.sin(np.arange(50 * 32, dtype=np.float32) * 0.01).reshape(1, 50, 32)
+    timestep = np.sin(np.arange(720 * 2, dtype=np.float32) * 0.005).reshape(1, 1, 1440)
+    vlm_kv = np.cos(np.arange(16 * 320, dtype=np.float32) * 0.01).reshape(1, 16, 320)
+
+    feeds = {"noisy_actions": noisy_actions, "timestep": timestep, "vlm_kv": vlm_kv}
+    sess.run(None, feeds)
+    t0 = time.perf_counter()
+    outputs = sess.run(None, feeds)
+    inference_ms = (time.perf_counter() - t0) * 1000.0
+    pred = outputs[0]
+
+    # MSE loss against zeros.
+    loss = float(np.mean(pred ** 2))
+
+    emit(model_name, compile_s, inference_ms, 0.0, pred, loss, sess)
+
+
 def emit(model_name, compile_s, inference_ms, latency_ms, logits, loss, sess=None):
     import onnxruntime as ort
 
@@ -384,18 +507,10 @@ def main():
         bench_resnet(model_name)
     elif model_type == "whisper":
         bench_whisper(model_name)
-    elif model_type in ("smolvla", "sd_unet"):
-        # These need lerobot/diffusers respectively — check and report.
-        dep = "lerobot" if model_type == "smolvla" else "diffusers"
-        try:
-            __import__(dep)
-        except ImportError:
-            print(f"[onnxruntime] {model_name} requires '{dep}' (pip install {dep})", file=sys.stderr)
-            print(f"unsupported: {model_name} (missing {dep})", file=sys.stderr)
-            sys.exit(1)
-        print(f"[onnxruntime] {model_name}: ONNX export not yet implemented", file=sys.stderr)
-        print(f"unsupported: {model_name}", file=sys.stderr)
-        sys.exit(1)
+    elif model_type == "smolvla":
+        bench_smolvla(model_name)
+    elif model_type == "sd_unet":
+        bench_sd(model_name)
     else:
         print(f"[onnxruntime] unsupported: {model_type}", file=sys.stderr)
         sys.exit(1)

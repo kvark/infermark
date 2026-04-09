@@ -179,7 +179,7 @@ CONFIGS = {
     ),
 }
 
-ALL_MODELS = ["SmolLM2-135M", "ResNet-50", "Whisper-tiny"]
+ALL_MODELS = ["SmolLM2-135M", "SmolVLA", "StableDiffusion", "ResNet-50", "Whisper-tiny"]
 
 
 # ── Benchmark ────────────────────────────────────────────────────────
@@ -370,6 +370,235 @@ def _build_whisper_params():
         layers.append(lp)
     p['layers'] = layers
     return p
+
+
+# ── SmolVLA Action Expert in pure JAX ────────────────────────────
+
+def _smolvla_attention(q_input, kv_input, params, n_heads, n_kv_heads, head_dim):
+    """GQA attention (no causal mask — SmolVLA is non-autoregressive)."""
+    sq = q_input.shape[0]
+    sk = kv_input.shape[0]
+    q = q_input @ params['wq']
+    k = kv_input @ params['wk']
+    v = kv_input @ params['wv']
+    q = q.reshape(sq, n_heads, head_dim)
+    k = k.reshape(sk, n_kv_heads, head_dim)
+    v = v.reshape(sk, n_kv_heads, head_dim)
+    rep = n_heads // n_kv_heads
+    if rep > 1:
+        k = jnp.repeat(k, rep, axis=1)
+        v = jnp.repeat(v, rep, axis=1)
+    scale = head_dim ** -0.5
+    scores = jnp.einsum('shd,thd->hst', q, k) * scale
+    weights = jax.nn.softmax(scores, axis=-1)
+    out = jnp.einsum('hst,thd->shd', weights, v)
+    return out.reshape(sq, n_heads * head_dim) @ params['wo']
+
+
+def _smolvla_forward(params, noisy_actions, timestep, vlm_kv):
+    """SmolVLA action expert forward pass."""
+    x = noisy_actions @ params['action_proj'] + timestep @ params['time_proj']
+    kv = vlm_kv @ params['kv_proj']
+    n_heads, n_kv_heads, head_dim = 15, 5, 64
+    for i, lp in enumerate(params['layers']):
+        # Attention
+        h = rms_norm(x, lp['norm1'])
+        if i % 2 == 0:
+            x = x + _smolvla_attention(h, h, lp, n_heads, n_kv_heads, head_dim)
+        else:
+            x = x + _smolvla_attention(h, kv, lp, n_heads, n_kv_heads, head_dim)
+        # FFN (SwiGLU)
+        h = rms_norm(x, lp['norm2'])
+        gate = jax.nn.silu(h @ lp['w_gate'])
+        up = h @ lp['w_up']
+        x = x + (gate * up) @ lp['w_down']
+    return rms_norm(x, params['final_norm']) @ params['head']
+
+
+def _build_smolvla_params():
+    dim, intermediate, n_layers = 720, 2048, 16
+    action_dim, vlm_kv_dim, head_dim = 32, 320, 64
+    n_heads, n_kv_heads = 15, 5
+    p = {
+        'action_proj': _init_transposed('action_proj.weight', dim, action_dim),
+        'time_proj': _init_transposed('time_proj.weight', dim, dim * 2),
+        'kv_proj': _init_transposed('kv_proj.weight', dim, vlm_kv_dim),
+        'final_norm': _init_param('norm.weight', (dim,)),
+        'head': _init_transposed('head.weight', action_dim, dim),
+    }
+    layers = []
+    for i in range(n_layers):
+        pf = f'layers.{i}'
+        lp = {
+            'norm1': _init_param(f'{pf}.norm1.weight', (dim,)),
+            'wq': _init_transposed(f'{pf}.attn.q_proj.weight', n_heads * head_dim, dim),
+            'wk': _init_transposed(f'{pf}.attn.k_proj.weight', n_kv_heads * head_dim, dim),
+            'wv': _init_transposed(f'{pf}.attn.v_proj.weight', n_kv_heads * head_dim, dim),
+            'wo': _init_transposed(f'{pf}.attn.o_proj.weight', dim, n_heads * head_dim),
+            'norm2': _init_param(f'{pf}.norm2.weight', (dim,)),
+            'w_gate': _init_transposed(f'{pf}.mlp.gate.weight', intermediate, dim),
+            'w_up': _init_transposed(f'{pf}.mlp.up.weight', intermediate, dim),
+            'w_down': _init_transposed(f'{pf}.mlp.down.weight', dim, intermediate),
+        }
+        layers.append(lp)
+    p['layers'] = layers
+    return p
+
+
+def bench_smolvla():
+    print("[jax] building SmolVLA action expert...", file=sys.stderr)
+    params = _build_smolvla_params()
+
+    chunk_size, action_dim, dim = 50, 32, 720
+    vlm_seq_len, vlm_kv_dim = 16, 320
+    noisy = jnp.sin(jnp.arange(chunk_size * action_dim, dtype=jnp.float32) * 0.01).reshape(chunk_size, action_dim)
+    timestep = jnp.sin(jnp.arange(dim * 2, dtype=jnp.float32) * 0.005).reshape(1, dim * 2)
+    vlm_kv = jnp.cos(jnp.arange(vlm_seq_len * vlm_kv_dim, dtype=jnp.float32) * 0.01).reshape(vlm_seq_len, vlm_kv_dim)
+
+    jit_fwd = jax.jit(_smolvla_forward)
+    def loss_fn(params, noisy, timestep, vlm_kv):
+        pred = _smolvla_forward(params, noisy, timestep, vlm_kv)
+        return jnp.mean(pred ** 2)
+    jit_grad = jax.jit(jax.grad(loss_fn))
+
+    print("[jax] JIT compiling...", file=sys.stderr)
+    t0 = time.perf_counter()
+    pred = jit_fwd(params, noisy, timestep, vlm_kv); pred.block_until_ready()
+    grads = jit_grad(params, noisy, timestep, vlm_kv); jax.tree.map(lambda x: x.block_until_ready(), grads)
+    compile_s = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
+    pred = jit_fwd(params, noisy, timestep, vlm_kv); pred.block_until_ready()
+    inference_ms = (time.perf_counter() - t0) * 1000.0
+
+    pred_np = np.asarray(pred, dtype=np.float32)
+    loss_val = float(np.mean(pred_np ** 2))
+
+    t0 = time.perf_counter()
+    grads = jit_grad(params, noisy, timestep, vlm_kv); jax.tree.map(lambda x: x.block_until_ready(), grads)
+    training_ms = (time.perf_counter() - t0) * 1000.0
+
+    _emit("SmolVLA", compile_s, inference_ms, 0.0, training_ms, pred_np, loss_val)
+
+
+# ── SD U-Net (simplified, matching PyTorch/meganeura) ────────────
+
+def _group_norm(x, w, b, num_groups, eps=1e-5):
+    """GroupNorm: x=[N,C,H,W]."""
+    n, c, h, w_ = x.shape
+    x = x.reshape(n, num_groups, c // num_groups, h, w_)
+    mean = x.mean(axis=(2, 3, 4), keepdims=True)
+    var = x.var(axis=(2, 3, 4), keepdims=True)
+    x = (x - mean) / jnp.sqrt(var + eps)
+    x = x.reshape(n, c, h, w_)
+    return x * w.reshape(1, -1, 1, 1) + b.reshape(1, -1, 1, 1)
+
+
+def _sd_resblock(x, params, num_groups, eps=1e-5):
+    h = jax.nn.silu(_group_norm(x, params['n1_w'], params['n1_b'], num_groups, eps))
+    h = _conv2d(h, params['c1'], stride=1, padding=1)
+    h = jax.nn.silu(_group_norm(h, params['n2_w'], params['n2_b'], num_groups, eps))
+    h = _conv2d(h, params['c2'], stride=1, padding=1)
+    shortcut = _conv2d(x, params['res'], stride=1, padding=0) if 'res' in params else x
+    return h + shortcut
+
+
+def _sd_unet_forward(params, x):
+    num_groups, eps = 16, 1e-5
+    x = _conv2d(x, params['conv_in'], stride=1, padding=1)
+    skips = []
+    for i, (bp, ds) in enumerate(zip(params['enc'], params['down'])):
+        x = _sd_resblock(x, bp, num_groups, eps)
+        skips.append(x)
+        if ds is not None:
+            x = _conv2d(x, ds, stride=2, padding=1)
+    x = _sd_resblock(x, params['mid'], num_groups, eps)
+    for i, (bp, up) in enumerate(zip(params['dec'], params['up'])):
+        level = len(params['enc']) - 1 - i
+        if up is not None:
+            x = jax.image.resize(x, (x.shape[0], x.shape[1], x.shape[2]*2, x.shape[3]*2), method='nearest')
+        x = jnp.concatenate([x, skips[level]], axis=1)
+        x = _sd_resblock(x, bp, num_groups, eps)
+    x = jax.nn.silu(_group_norm(x, params['norm_w'], params['norm_b'], num_groups, eps))
+    return _conv2d(x, params['conv_out'], stride=1, padding=1)
+
+
+def _build_sd_resblock_params(prefix, in_c, out_c, num_groups):
+    p = {
+        'n1_w': _init_param(f'{prefix}.norm1.weight', (in_c,)),
+        'n1_b': _init_param(f'{prefix}.norm1.bias', (in_c,)),
+        'c1': _init_param(f'{prefix}.conv1.weight', (out_c, in_c, 3, 3)),
+        'n2_w': _init_param(f'{prefix}.norm2.weight', (out_c,)),
+        'n2_b': _init_param(f'{prefix}.norm2.bias', (out_c,)),
+        'c2': _init_param(f'{prefix}.conv2.weight', (out_c, out_c, 3, 3)),
+    }
+    if in_c != out_c:
+        p['res'] = _init_param(f'{prefix}.res_conv.weight', (out_c, in_c, 1, 1))
+    return p
+
+
+def _build_sd_unet_params():
+    in_c, base, levels, ng = 4, 64, 3, 16
+    ch_mults = [1 << i for i in range(levels)]
+    p = {
+        'conv_in': _init_param('conv_in.weight', (base, in_c, 3, 3)),
+        'norm_w': _init_param('norm_out.weight', (base,)),
+        'norm_b': _init_param('norm_out.bias', (base,)),
+        'conv_out': _init_param('conv_out.weight', (in_c, base, 3, 3)),
+    }
+    enc, down = [], []
+    prev_c = base
+    for i, m in enumerate(ch_mults):
+        out_c = base * m
+        enc.append(_build_sd_resblock_params(f'encoder_blocks.{i}', prev_c, out_c, ng))
+        down.append(_init_param(f'downsamples.{i}.weight', (out_c, out_c, 3, 3)) if i < levels - 1 else None)
+        prev_c = out_c
+    p['enc'] = enc
+    p['down'] = down
+    p['mid'] = _build_sd_resblock_params('middle', prev_c, prev_c, ng)
+    dec, up = [], []
+    for i, level in enumerate(reversed(range(levels))):
+        out_c = base * ch_mults[level]
+        skip_c = out_c
+        up.append(True if level < levels - 1 else None)
+        dec.append(_build_sd_resblock_params(f'decoder_blocks.{i}', prev_c + skip_c, out_c, ng))
+        prev_c = out_c
+    p['dec'] = dec
+    p['up'] = up
+    return p
+
+
+def bench_sd():
+    print("[jax] building SD U-Net...", file=sys.stderr)
+    params = _build_sd_unet_params()
+    batch, in_c, res = 2, 4, 32
+    in_size = batch * in_c * res * res
+    noisy = jnp.sin(jnp.arange(in_size, dtype=jnp.float32) * 0.01).reshape(batch, in_c, res, res)
+
+    jit_fwd = jax.jit(_sd_unet_forward)
+    def loss_fn(params, x):
+        pred = _sd_unet_forward(params, x)
+        return jnp.mean(pred ** 2)
+    jit_grad = jax.jit(jax.grad(loss_fn))
+
+    print("[jax] JIT compiling...", file=sys.stderr)
+    t0 = time.perf_counter()
+    pred = jit_fwd(params, noisy); pred.block_until_ready()
+    grads = jit_grad(params, noisy); jax.tree.map(lambda x: x.block_until_ready(), grads)
+    compile_s = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
+    pred = jit_fwd(params, noisy); pred.block_until_ready()
+    inference_ms = (time.perf_counter() - t0) * 1000.0
+
+    pred_np = np.asarray(pred, dtype=np.float32)
+    loss_val = float(np.mean(pred_np ** 2))
+
+    t0 = time.perf_counter()
+    grads = jit_grad(params, noisy); jax.tree.map(lambda x: x.block_until_ready(), grads)
+    training_ms = (time.perf_counter() - t0) * 1000.0
+
+    _emit("StableDiffusion", compile_s, inference_ms, 0.0, training_ms, pred_np, loss_val)
 
 
 # ── Emit helper ──────────────────────────────────────────────────
@@ -612,5 +841,9 @@ if __name__ == "__main__":
         bench_resnet()
     elif model_name == "Whisper-tiny":
         bench_whisper()
+    elif model_name == "SmolVLA":
+        bench_smolvla()
+    elif model_name == "StableDiffusion":
+        bench_sd()
     else:
         bench(model_name)
