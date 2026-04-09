@@ -9,9 +9,16 @@ description = "Luminal framework benchmark runner for inferena"
 name = "inferena-luminal"
 path = "src/main.rs"
 
+[features]
+default = []
+cuda = ["dep:luminal_cuda_lite"]
+metal = ["dep:luminal_metal"]
+
 [dependencies]
 luminal = { workspace = true }
 luminal_nn = { workspace = true }
+luminal_cuda_lite = { workspace = true, optional = true }
+luminal_metal = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.10"

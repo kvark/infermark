@@ -10,7 +10,20 @@ MODEL="${1:-SmolLM2-135M}"
 source "$ROOT_DIR/scripts/cargo-rev.sh"
 export FRAMEWORK_REV=$(cargo_rev_short luminal "$ROOT_DIR")
 
-echo "[luminal] Building release binary..." >&2
-cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml" -p inferena-luminal 2>&1 >&2
+# Select GPU backend based on platform.
+FEATURES=""
+case "$(uname -s)" in
+    Linux*)
+        if [ -d /usr/local/cuda ] || command -v nvcc &>/dev/null; then
+            FEATURES="--features cuda"
+        fi
+        ;;
+    Darwin*)
+        FEATURES="--features metal"
+        ;;
+esac
+
+echo "[luminal] Building release binary... $FEATURES" >&2
+cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml" -p inferena-luminal $FEATURES 2>&1 >&2
 
 exec "$ROOT_DIR/target/release/inferena-luminal" "$MODEL"
