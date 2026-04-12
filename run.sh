@@ -355,10 +355,13 @@ fi
 mkdir -p "$ROOT_DIR/results"
 
 # --- Build all Rust crates (harness + framework runners) at once ---
-# Uses default-members (excludes inferi which needs cargo-gpu).
-# Frameworks with special build deps (like inferi) build via their own run.sh.
 echo "Building all Rust crates..." >&2
-cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml" 2>&1 >&2
+if cargo gpu --version &>/dev/null; then
+    cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml" --workspace 2>&1 >&2
+else
+    echo "  (cargo-gpu not found — skipping inferi; install via: cargo install cargo-gpu --git https://github.com/Rust-GPU/cargo-gpu)" >&2
+    cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml" --workspace --exclude inferena-inferi 2>&1 >&2
+fi
 
 HARNESS="$ROOT_DIR/target/release/inferena"
 

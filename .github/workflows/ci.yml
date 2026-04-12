@@ -16,10 +16,10 @@ jobs:
         include:
           - os: ubuntu-latest
             name: Linux
-            packages: "inferena-harness inferena-candle inferena-burn inferena-luminal inferena-meganeura"
+            packages: "inferena-harness inferena-candle inferena-burn inferena-inferi inferena-luminal inferena-meganeura"
           - os: macos-latest
             name: macOS
-            packages: "inferena-harness inferena-candle inferena-burn inferena-luminal inferena-meganeura"
+            packages: "inferena-harness inferena-candle inferena-burn inferena-inferi inferena-luminal inferena-meganeura"
           - os: windows-latest
             name: Windows
             # Burn (wgpu bleeding-edge) and Luminal have no Windows CI upstream.
@@ -34,6 +34,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: check-${{ matrix.os }}
+
+      - name: Install cargo-gpu (for inferi shader compilation)
+        run: cargo install cargo-gpu --git https://github.com/Rust-GPU/cargo-gpu
 
       - name: Check packages
         shell: bash
@@ -62,6 +65,9 @@ jobs:
 
       - name: Verify Vulkan (Lavapipe)
         run: vulkaninfo --summary || true
+
+      - name: Install cargo-gpu (for inferi shader compilation)
+        run: cargo install cargo-gpu --git https://github.com/Rust-GPU/cargo-gpu
 
       - uses: actions/setup-python@v5
         with:
@@ -95,6 +101,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: smoke-macos
+
+      - name: Install cargo-gpu (for inferi shader compilation)
+        run: cargo install cargo-gpu --git https://github.com/Rust-GPU/cargo-gpu
 
       - uses: actions/setup-python@v5
         with:
