@@ -8,6 +8,16 @@ members = [
     "frameworks/luminal",
     "frameworks/meganeura",
 ]
+# inferi requires `cargo-gpu` (Rust GPU shader compiler) to build, so it is
+# excluded from the default workspace build.  Its own run.sh checks for the
+# tool and builds with `-p inferena-inferi` instead.
+default-members = [
+    "harness",
+    "frameworks/burn",
+    "frameworks/candle",
+    "frameworks/luminal",
+    "frameworks/meganeura",
+]
 
 [workspace.dependencies]
 # Bleeding-edge git dependencies, pinned to specific revisions.

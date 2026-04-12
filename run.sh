@@ -274,6 +274,8 @@ print('GPU offload' if llama_supports_gpu_offload() else 'CPU only')
         bin="$ROOT_DIR/target/release/$pkg"
         if [ -f "$bin" ]; then
             echo "  ✓ $name (binary at $bin)"
+        elif [ "$name" = "inferi" ] && ! cargo gpu --version &>/dev/null; then
+            echo "  ✗ $name — requires cargo-gpu (cargo install cargo-gpu --git https://github.com/Rust-GPU/cargo-gpu)"
         elif cargo check -p "$pkg" --manifest-path "$ROOT_DIR/Cargo.toml" 2>/dev/null; then
             echo "  ~ $name (compiles, not yet built — run without --check to build)"
         else
@@ -353,8 +355,10 @@ fi
 mkdir -p "$ROOT_DIR/results"
 
 # --- Build all Rust crates (harness + framework runners) at once ---
+# Uses default-members (excludes inferi which needs cargo-gpu).
+# Frameworks with special build deps (like inferi) build via their own run.sh.
 echo "Building all Rust crates..." >&2
-cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml" --workspace 2>&1 >&2
+cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml" 2>&1 >&2
 
 HARNESS="$ROOT_DIR/target/release/inferena"
 
