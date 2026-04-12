@@ -1,0 +1,25 @@
+[package]
+name = "inferena-inferi"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Inferi framework benchmark runner for inferena"
+
+[[bin]]
+name = "inferena-inferi"
+path = "src/main.rs"
+
+[features]
+default = []
+cuda = ["inferi/cuda"]
+
+[dependencies]
+inferi = { workspace = true }
+nalgebra = "0.34"
+memmap2 = "0.9"
+anyhow = "1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = "0.10"
+hex = "0.4"
+pollster = "0.4"

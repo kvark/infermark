@@ -73,7 +73,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -h, --help                Show this help"
             echo ""
             echo "Models: $ALL_MODELS"
-            echo "Frameworks: pytorch, candle, burn, luminal, meganeura, ggml, onnxruntime, jax, mlx"
+            echo "Frameworks: pytorch, candle, burn, inferi, luminal, meganeura, ggml, onnxruntime, jax, mlx"
             exit 0
             ;;
         *)
@@ -261,13 +261,14 @@ print('GPU offload' if llama_supports_gpu_offload() else 'CPU only')
     echo "  Rust framework GPU support:"
     echo "    candle:    CUDA, Metal          (no Vulkan/ROCm)"
     echo "    burn:      wgpu (Vulkan, Metal, DX12)"
+    echo "    inferi:    wgpu (Vulkan, Metal), CUDA"
     echo "    luminal:   CUDA, Metal          (no Vulkan/ROCm)"
     echo "    meganeura: Vulkan, Metal"
 
     echo ""
 
     # Rust frameworks — check if binaries exist or can compile
-    RUST_FW="inferena-candle inferena-burn inferena-luminal inferena-meganeura"
+    RUST_FW="inferena-candle inferena-burn inferena-inferi inferena-luminal inferena-meganeura"
     for pkg in $RUST_FW; do
         name="${pkg#inferena-}"
         bin="$ROOT_DIR/target/release/$pkg"
