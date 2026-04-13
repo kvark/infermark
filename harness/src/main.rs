@@ -93,6 +93,7 @@ fn all_frameworks() -> Vec<&'static str> {
         "pytorch",
         "candle",
         "burn",
+        "inferi",
         "luminal",
         "meganeura",
         "ggml",
@@ -114,6 +115,7 @@ fn framework_meta(name: &str) -> (&'static str, &'static str) {
         "burn" => ("Burn", "https://github.com/tracel-ai/burn"),
         "luminal" => ("Luminal", "https://github.com/luminal-ai/luminal"),
         "meganeura" => ("Meganeura", "https://github.com/kvark/meganeura"),
+        "inferi" => ("Inferi", "https://github.com/dimforge/inferi"),
         "ggml" => ("GGML", "https://github.com/ggerganov/ggml"),
         "onnxruntime" => ("ONNX Runtime", "https://github.com/microsoft/onnxruntime"),
         "jax" => ("JAX", "https://github.com/jax-ml/jax"),
@@ -163,6 +165,13 @@ fn framework_md_link(name: &str, extra: &serde_json::Map<String, serde_json::Val
             "burn" => "wgpu",
             "luminal" => "CPU",
             "meganeura" => {
+                if cfg!(target_os = "macos") {
+                    "Metal"
+                } else {
+                    "Vulkan"
+                }
+            }
+            "inferi" => {
                 if cfg!(target_os = "macos") {
                     "Metal"
                 } else {

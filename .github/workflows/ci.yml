@@ -16,10 +16,10 @@ jobs:
         include:
           - os: ubuntu-latest
             name: Linux
-            packages: "inferena-harness inferena-candle inferena-burn inferena-luminal inferena-meganeura"
+            packages: "inferena-harness inferena-candle inferena-burn inferena-inferi inferena-luminal inferena-meganeura"
           - os: macos-latest
             name: macOS
-            packages: "inferena-harness inferena-candle inferena-burn inferena-luminal inferena-meganeura"
+            packages: "inferena-harness inferena-candle inferena-burn inferena-inferi inferena-luminal inferena-meganeura"
           - os: windows-latest
             name: Windows
             # Burn (wgpu bleeding-edge) and Luminal have no Windows CI upstream.
@@ -34,6 +34,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: check-${{ matrix.os }}
+
+      - name: Install cargo-gpu and Rust GPU toolchain (for inferi)
+        shell: bash
+        run: |
+          cargo install cargo-gpu --git https://github.com/Rust-GPU/cargo-gpu
+          cargo gpu install --auto-install-rust-toolchain \
+            --spirv-builder-source https://github.com/Rust-GPU/rust-gpu \
+            --spirv-builder-version 6a67e7b5954f37989ad540a555b5d6969073592e
 
       - name: Check packages
         shell: bash
@@ -70,8 +78,8 @@ jobs:
       - name: Install Python deps
         run: pip install -r requirements.txt
 
-      - name: Build all Rust frameworks
-        run: cargo build --release --workspace
+      - name: Build Rust frameworks
+        run: cargo build --release --workspace --exclude inferena-inferi
 
       - name: Run SmolLM2-135M (CPU frameworks)
         run: ./target/release/inferena --model SmolLM2-135M --frameworks pytorch,candle,luminal,burn --root .
@@ -104,7 +112,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Build Rust frameworks
-        run: cargo build --release --workspace
+        run: cargo build --release --workspace --exclude inferena-inferi
 
       - name: Run SmolLM2-135M
         run: ./target/release/inferena --model SmolLM2-135M --frameworks pytorch,candle,burn --root .

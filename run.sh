@@ -73,7 +73,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -h, --help                Show this help"
             echo ""
             echo "Models: $ALL_MODELS"
-            echo "Frameworks: pytorch, candle, burn, luminal, meganeura, ggml, onnxruntime, jax, mlx"
+            echo "Frameworks: pytorch, candle, burn, inferi, luminal, meganeura, ggml, onnxruntime, jax, mlx"
             exit 0
             ;;
         *)
@@ -261,18 +261,21 @@ print('GPU offload' if llama_supports_gpu_offload() else 'CPU only')
     echo "  Rust framework GPU support:"
     echo "    candle:    CUDA, Metal          (no Vulkan/ROCm)"
     echo "    burn:      wgpu (Vulkan, Metal, DX12)"
+    echo "    inferi:    wgpu (Vulkan, Metal), CUDA"
     echo "    luminal:   CUDA, Metal          (no Vulkan/ROCm)"
     echo "    meganeura: Vulkan, Metal"
 
     echo ""
 
     # Rust frameworks — check if binaries exist or can compile
-    RUST_FW="inferena-candle inferena-burn inferena-luminal inferena-meganeura"
+    RUST_FW="inferena-candle inferena-burn inferena-inferi inferena-luminal inferena-meganeura"
     for pkg in $RUST_FW; do
         name="${pkg#inferena-}"
         bin="$ROOT_DIR/target/release/$pkg"
         if [ -f "$bin" ]; then
             echo "  ✓ $name (binary at $bin)"
+        elif [ "$name" = "inferi" ] && ! cargo gpu --version &>/dev/null; then
+            echo "  ✗ $name — requires cargo-gpu (cargo install cargo-gpu --git https://github.com/Rust-GPU/cargo-gpu)"
         elif cargo check -p "$pkg" --manifest-path "$ROOT_DIR/Cargo.toml" 2>/dev/null; then
             echo "  ~ $name (compiles, not yet built — run without --check to build)"
         else
@@ -353,7 +356,12 @@ mkdir -p "$ROOT_DIR/results"
 
 # --- Build all Rust crates (harness + framework runners) at once ---
 echo "Building all Rust crates..." >&2
-cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml" --workspace 2>&1 >&2
+if cargo gpu --version &>/dev/null; then
+    cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml" --workspace 2>&1 >&2
+else
+    echo "  (cargo-gpu not found — skipping inferi; install via: cargo install cargo-gpu --git https://github.com/Rust-GPU/cargo-gpu)" >&2
+    cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml" --workspace --exclude inferena-inferi 2>&1 >&2
+fi
 
 HARNESS="$ROOT_DIR/target/release/inferena"
 
