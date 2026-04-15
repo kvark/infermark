@@ -759,67 +759,76 @@ fn bench_whisper() {
     let batch: u32 = 1;
     let mel_len: u32 = 3000;
     let d_model = config.d_model;
+    let seq_len = mel_len / 2; // stride-2 in conv2
+    let num_classes: usize = 64;
 
     eprintln!("[meganeura] building Whisper encoder graph...");
     let compile_start = Instant::now();
-    let mut g = Graph::new();
-    let encoder_out = whisper::build_encoder(&mut g, &config, batch, mel_len);
-    g.set_outputs(vec![encoder_out]);
+    let mut infer_g = Graph::new();
+    let encoder_out = whisper::build_encoder(&mut infer_g, &config, batch, mel_len);
+    infer_g.set_outputs(vec![encoder_out]);
 
-    eprintln!("[meganeura] compiling...");
-    let mut session = build_inference_session(&g);
+    eprintln!("[meganeura] compiling inference session...");
+    let mut session = build_inference_session(&infer_g);
+
+    // Separate training graph (encoder + tiny classifier head + CE loss).
+    // PyTorch ground truth uses encoder MSE, so we only use this for backward timing.
+    eprintln!("[meganeura] building + compiling Whisper training graph...");
+    let train_g = whisper::build_training_graph(&config, batch, mel_len);
+    let mut train_session = build_session(&train_g);
 
     // Load weights with deterministic init matching PyTorch encoder.
     let transposed = whisper::transposed_weight_names(&config);
     let transposed_set: std::collections::HashSet<&str> =
         transposed.iter().map(|s| s.as_str()).collect();
     let prefix = "model.encoder.";
-    for (name, buf_ref) in session.plan().param_buffers.clone().iter() {
-        let n = session.plan().buffers[buf_ref.0 as usize] / 4;
-        // Strip prefix and map fused_bias→bias for seed to match PyTorch encoder names.
-        let seed_name = name.strip_prefix(prefix).unwrap_or(name);
-        let seed_name = seed_name.replace("fused_bias", "bias");
-        let seed = name_seed(&seed_name);
+    let init_params = |session: &mut meganeura::Session| {
+        for (name, buf_ref) in session.plan().param_buffers.clone().iter() {
+            let n = session.plan().buffers[buf_ref.0 as usize] / 4;
+            let seed_name = name.strip_prefix(prefix).unwrap_or(name);
+            let seed_name = seed_name.replace("fused_bias", "bias");
+            let seed = name_seed(&seed_name);
 
-        let data: Vec<f32> = if name.contains("fused_bias") {
-            // Per-channel bias broadcast to [batch * channels * spatial].
-            let channels = d_model;
-            let spatial = n / (batch as usize * channels);
-            let per_ch: Vec<f32> = (0..channels)
-                .map(|c| (c as f32 * 0.01 + seed).sin() * 0.1)
-                .collect();
-            let mut buf = vec![0.0f32; n];
-            for b in 0..batch as usize {
-                for c in 0..channels {
-                    for s in 0..spatial {
-                        buf[(b * channels + c) * spatial + s] = per_ch[c];
+            let data: Vec<f32> = if name.contains("fused_bias") {
+                let channels = d_model;
+                let spatial = n / (batch as usize * channels);
+                let per_ch: Vec<f32> = (0..channels)
+                    .map(|c| (c as f32 * 0.01 + seed).sin() * 0.1)
+                    .collect();
+                let mut buf = vec![0.0f32; n];
+                for b in 0..batch as usize {
+                    for c in 0..channels {
+                        for s in 0..spatial {
+                            buf[(b * channels + c) * spatial + s] = per_ch[c];
+                        }
                     }
                 }
-            }
-            buf
-        } else if transposed_set.contains(name.as_str()) {
-            // Linear weight: init in PyTorch [out, in] then transpose to [in, out].
-            let (in_dim, out_dim) = if name.contains("fc1.weight") {
-                (config.d_model, config.ffn_dim)
-            } else if name.contains("fc2.weight") {
-                (config.ffn_dim, config.d_model)
-            } else {
-                (config.d_model, config.d_model)
-            };
-            let mut buf = vec![0.0f32; n];
-            for i in 0..out_dim {
-                for j in 0..in_dim {
-                    buf[j * out_dim + i] = ((i * in_dim + j) as f32 * 0.01 + seed).sin() * 0.1;
+                buf
+            } else if transposed_set.contains(name.as_str()) {
+                let (in_dim, out_dim) = if name.contains("fc1.weight") {
+                    (config.d_model, config.ffn_dim)
+                } else if name.contains("fc2.weight") {
+                    (config.ffn_dim, config.d_model)
+                } else {
+                    (config.d_model, config.d_model)
+                };
+                let mut buf = vec![0.0f32; n];
+                for i in 0..out_dim {
+                    for j in 0..in_dim {
+                        buf[j * out_dim + i] = ((i * in_dim + j) as f32 * 0.01 + seed).sin() * 0.1;
+                    }
                 }
-            }
-            buf
-        } else {
-            (0..n)
-                .map(|j| (j as f32 * 0.01 + seed).sin() * 0.1)
-                .collect()
-        };
-        session.set_parameter(name, &data);
-    }
+                buf
+            } else {
+                (0..n)
+                    .map(|j| (j as f32 * 0.01 + seed).sin() * 0.1)
+                    .collect()
+            };
+            session.set_parameter(name, &data);
+        }
+    };
+    init_params(&mut session);
+    init_params(&mut train_session);
 
     let compile_s = compile_start.elapsed().as_secs_f64();
     eprintln!("[meganeura] ready (compile: {compile_s:.2}s)");
@@ -827,6 +836,10 @@ fn bench_whisper() {
     // --- Forward ---
     let mel_size = (batch * config.n_mels as u32 * mel_len) as usize;
     let mel: Vec<f32> = (0..mel_size).map(|i| (i as f32 * 0.001).sin()).collect();
+    let mut one_hot_labels = vec![0.0f32; seq_len as usize * num_classes];
+    for t in 0..seq_len as usize {
+        one_hot_labels[t * num_classes + (t % num_classes)] = 1.0;
+    }
 
     // Warm-up (first step compiles Vulkan pipelines).
     session.set_input("mel", &mel);
@@ -839,32 +852,44 @@ fn bench_whisper() {
     session.wait();
     let forward_ms = fwd_start.elapsed().as_secs_f64() * 1000.0;
 
-    let seq_len = mel_len / 2; // stride-2 in conv2
     let output = session.read_output((batch * seq_len * d_model as u32) as usize);
-
-    // MSE loss (encoder output vs zero).
+    // MSE loss (encoder output vs zero) — matches PyTorch ground truth.
     let loss: f64 = output.iter().map(|&v| (v as f64).powi(2)).sum::<f64>() / output.len() as f64;
+    eprintln!("[meganeura] forward: {forward_ms:.2}ms, loss={loss:.6}");
 
-    // --- Latency (re-run forward — same batch/mel_len) ---
-    session.set_input("mel", &mel);
-    session.step();
-    session.wait();
+    // --- Training step ---
+    // NOTE: on AMD/RADV the backward kernels (GELU at [576000]) can cause a GPU
+    // context loss; the main harness forces the NVIDIA ICD via VK_ICD_FILENAMES.
+    train_session.set_input("mel", &mel);
+    train_session.set_input("labels", &one_hot_labels);
+    train_session.step();
+    train_session.wait();
+
+    train_session.set_input("mel", &mel);
+    train_session.set_input("labels", &one_hot_labels);
+    let bwd_start = Instant::now();
+    train_session.step();
+    train_session.wait();
+    let train_ms = bwd_start.elapsed().as_secs_f64() * 1000.0;
+    let backward_ms = (train_ms - forward_ms).max(0.0);
+    let grad_norm = compute_grad_norm(&train_session);
+
+    // --- Latency ---
     session.set_input("mel", &mel);
     let lat_start = Instant::now();
     session.step();
     session.wait();
     let latency_ms = lat_start.elapsed().as_secs_f64() * 1000.0;
 
-    // Training not yet supported — shape mismatch in meganeura's whisper training graph.
     emit_result(
         "Whisper-tiny",
         compile_s,
         forward_ms,
-        0.0,
+        backward_ms,
         &output,
         loss,
         latency_ms,
-        0.0,
+        grad_norm,
     );
 }
 

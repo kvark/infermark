@@ -546,13 +546,21 @@ fn print_table(outcomes: &[FrameworkOutcome], successes: &[&BenchResult]) {
                 );
             }
             FrameworkOutcome::Error { framework, .. } => {
-                let empty_extra = serde_json::Map::new();
-                let link = framework_md_link(framework, &empty_extra);
+                let (display, url) = framework_meta(framework);
+                let link = if url.is_empty() {
+                    display.to_string()
+                } else {
+                    format!("[{display}]({url})")
+                };
                 println!("| {platform} | {link} | ✗ | ✗ | ✗ | ✗ | |");
             }
             FrameworkOutcome::Skipped { framework, .. } => {
-                let empty_extra = serde_json::Map::new();
-                let link = framework_md_link(framework, &empty_extra);
+                let (display, url) = framework_meta(framework);
+                let link = if url.is_empty() {
+                    display.to_string()
+                } else {
+                    format!("[{display}]({url})")
+                };
                 println!("| {platform} | {link} | — | — | — | — | |");
             }
         }
