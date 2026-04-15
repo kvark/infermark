@@ -39,15 +39,15 @@ Benchmark config: 30s mel spectrogram (80x3000), 4-token decoder input, float32,
 | | [GGML](https://github.com/ggerganov/ggml) (faster-whisper (CTranslate2, CPU)) | 86.62 | 303 | 289 | — | 0.00 |
 | | [ONNX Runtime](https://github.com/microsoft/onnxruntime) (CoreMLExecutionProvider) | 8.85 | 504 | — | — | 0.01 |
 | | [JAX](https://github.com/jax-ml/jax) (CPU) | 4.62 | 791 | 576 | 2024 | 0.01 |
-| NVIDIA GeForce RTX 5080 | [PyTorch 2.11.0+cu130](https://github.com/pytorch/pytorch/releases/tag/v2.11.0) (CUDA 13.0) | 4.14 | **2** | **2** | **13** | 0.01 |
-| | [Candle](https://github.com/huggingface/candle/tree/6b4d8a1) (CUDA) | **0.02** | 42 | — | — | 0.00 |
-| | [Burn](https://github.com/tracel-ai/burn) (wgpu) | — | — | — | — | |
-| | [Inferi](https://github.com/dimforge/inferi) (Vulkan) | ✗ | ✗ | ✗ | ✗ | |
-| | [Luminal](https://github.com/luminal-ai/luminal) (CPU) | — | — | — | — | |
-| | [Meganeura](https://github.com/kvark/meganeura/tree/6b76b5e) (Vulkan) | 0.24 | 21 | 21 | — | 0.01 |
-| | [GGML](https://github.com/ggerganov/ggml) (faster-whisper (CTranslate2, CUDA)) | 8.23 | 30 | 26 | — | 0.00 |
-| | [ONNX Runtime](https://github.com/microsoft/onnxruntime) (CUDAExecutionProvider) | 1.88 | 3 | — | — | 0.01 |
-| | [JAX](https://github.com/jax-ml/jax) (CPU) | 1.12 | 136 | 120 | 384 | 0.01 |
+| NVIDIA GeForce RTX 5080 | [PyTorch 2.11.0+cu130](https://github.com/pytorch/pytorch/releases/tag/v2.11.0) (CUDA 13.0) | 3.82 | **2** | **2** | **10** | 0.01 |
+| | [Candle](https://github.com/huggingface/candle/tree/6b4d8a1) (CUDA) | **0.01** | 42 | — | — | 0.00 |
+| | [Burn](https://github.com/tracel-ai/burn) | — | — | — | — | |
+| | [Inferi](https://github.com/dimforge/inferi) | ✗ | ✗ | ✗ | ✗ | |
+| | [Luminal](https://github.com/luminal-ai/luminal) | — | — | — | — | |
+| | [Meganeura](https://github.com/kvark/meganeura/tree/6b76b5e) (Vulkan) | 0.56 | 21 | 21 | 310 | 0.01 |
+| | [GGML](https://github.com/ggerganov/ggml) (faster-whisper (CTranslate2, CUDA)) | 9.18 | 22 | 13 | — | 0.00 |
+| | [ONNX Runtime](https://github.com/microsoft/onnxruntime) (CUDAExecutionProvider) | 1.81 | 3 | — | — | 0.01 |
+| | [JAX](https://github.com/jax-ml/jax) (CPU) | 1.14 | 133 | 123 | 393 | 0.01 |
 
 **Correctness:** PyTorch vs ONNX Runtime: **PASS** (loss diff 0.0).
 
