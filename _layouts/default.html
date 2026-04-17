@@ -200,6 +200,9 @@
             .framework-filter label:hover {
                 background: #e8f0fe;
             }
+            .framework-filter label.no-data {
+                color: #b0b0b0;
+            }
             .framework-filter button {
                 margin-left: auto;
                 padding: 2px 10px;
@@ -719,7 +722,8 @@
                     var legend = '<div class="chart-legend">' +
                         '<span><span class="swatch inference"></span>Inference</span>' +
                         '<span><span class="swatch training"></span>Training (extension)</span>' +
-                        '<span style="margin-left:auto">Sorted by fastest inference on platform</span>' +
+                        '<span><strong>Lower is better</strong> — shorter bar = faster</span>' +
+                        '<span style="margin-left:auto">Platforms sorted fastest first</span>' +
                         '</div>';
                     var html = legend + platforms.map(function (p) {
                         var chart = svgStackedBar(p);
@@ -914,8 +918,24 @@
                 // 2) Build filter bar per panel.
                 document.querySelectorAll(".tab-panel").forEach(function (panel) {
                     var fws = new Set();
+                    // Frameworks that produced at least one numeric row. A
+                    // framework whose every row is ✗ on this platform adds
+                    // noise to the filter and the charts; default to off but
+                    // keep the checkbox so users can still enable it.
+                    var fwHasData = {};
                     panel.querySelectorAll("table tbody tr").forEach(function (tr) {
-                        if (tr.dataset.framework) fws.add(tr.dataset.framework);
+                        if (!tr.dataset.framework) return;
+                        fws.add(tr.dataset.framework);
+                        var cells = tr.querySelectorAll("td");
+                        // Any numeric cell in cols 2..6 counts as "has data".
+                        for (var i = 2; i <= 6; i++) {
+                            if (i >= cells.length) break;
+                            var t = cells[i].textContent.trim();
+                            if (t && t !== "—" && t !== "✗" && /\d/.test(t)) {
+                                fwHasData[tr.dataset.framework] = true;
+                                break;
+                            }
+                        }
                     });
                     if (fws.size === 0) return;
                     var bar = document.createElement("div");
@@ -930,7 +950,14 @@
                         var cb = document.createElement("input");
                         cb.type = "checkbox";
                         cb.value = fw;
-                        cb.checked = saved ? saved.has(fw) : true;
+                        // Saved state wins over defaults. Otherwise: on if the
+                        // framework has at least one numeric row in this tab.
+                        if (saved) {
+                            cb.checked = saved.has(fw);
+                        } else {
+                            cb.checked = !!fwHasData[fw];
+                        }
+                        if (!fwHasData[fw]) l.classList.add("no-data");
                         cb.addEventListener("change", function () { applyFilter(panel); });
                         l.appendChild(cb);
                         l.appendChild(document.createTextNode(frameworkLabel[fw]));

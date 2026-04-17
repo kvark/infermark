@@ -10,11 +10,9 @@ permalink: /models/StableDiffusion
 
 ## Results
 
-Two benchmark configurations are used depending on framework capabilities:
+Most frameworks (PyTorch, Meganeura, ONNX Runtime, JAX, MLX) run the **simplified U-Net** — Conv + GroupNorm + skip connections, no cross-attention or timestep embedding. Batch 2, 32×32×4 latent, base\_channels=64, 3 levels, ~2M params. Shared architecture, but each framework uses its own random-init parameters, so losses don't match across frameworks and several end up marked DIFFERENT MODEL even on identical structure.
 
-**Simplified U-Net** (PyTorch, Meganeura): Conv-only U-Net without cross-attention or timestep embedding. Batch 2, 32×32×4 latent, base_channels=64, 3 levels (~2M params). Enables apples-to-apples comparison of Conv2D + GroupNorm + skip connection performance.
-
-**Full SD 1.5 U-Net** (Candle): Complete architecture with cross-attention, timestep embedding, ~860M params, 64×64×4 latent. Marked DIFFERENT MODEL.
+**Candle** runs the **full SD 1.5 U-Net** (~860M params, 64×64×4 latent, cross-attention + timestep) — the real thing, marked DIFFERENT MODEL by design.
 
 | Platform | Framework | Compile (s) | Inference (ms) | Latency (ms) | Training (ms) | Loss |
 |----------|-----------|:-----------:|:--------------:|:------------:|:-------------:|:----:|
