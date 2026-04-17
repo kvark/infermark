@@ -21,8 +21,10 @@ fi
 
 # Select GPU backend based on platform.
 FEATURES=""
+EXE=""
 case "$(uname -s)" in
-    Linux*)
+    Linux*|MINGW*|MSYS*|CYGWIN*)
+        case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) EXE=.exe ;; esac
         if command -v nvidia-smi &>/dev/null; then
             FEATURES="--features cuda"
         elif command -v rocm-smi &>/dev/null || [ -d /opt/rocm ]; then
@@ -37,4 +39,4 @@ esac
 echo "[inferi] Building release binary... $FEATURES" >&2
 cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml" -p inferena-inferi $FEATURES 2>&1 >&2
 
-exec "$ROOT_DIR/target/release/inferena-inferi" "$MODEL"
+exec "$ROOT_DIR/target/release/inferena-inferi${EXE}" "$MODEL"

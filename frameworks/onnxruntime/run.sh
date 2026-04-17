@@ -8,8 +8,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 MODEL="${1:-SmolLM2-135M}"
 
+: "${PYTHON:?must be set by run.sh}"
+
 # --- Check dependencies ---
-if ! python3 -c "import onnxruntime" 2>/dev/null; then
+if ! "$PYTHON" -c "import onnxruntime" 2>/dev/null; then
     echo "[onnxruntime] onnxruntime not found. Install via:" >&2
     echo "  pip install onnxruntime              # CPU only" >&2
     echo "  pip install onnxruntime-gpu           # NVIDIA CUDA" >&2
@@ -21,7 +23,7 @@ fi
 # When both wheels are installed, the CPU one shadows the GPU one and only
 # CPUExecutionProvider is exposed. The GPU wheel already handles CPU fallback,
 # so resolving the conflict by removing the CPU wheel is safe.
-if python3 -c "import importlib.metadata as m; m.version('onnxruntime'); m.version('onnxruntime-gpu')" 2>/dev/null; then
+if "$PYTHON" -c "import importlib.metadata as m; m.version('onnxruntime'); m.version('onnxruntime-gpu')" 2>/dev/null; then
     echo "[onnxruntime] both onnxruntime (CPU) and onnxruntime-gpu installed — removing CPU wheel to expose CUDA provider" >&2
     pip uninstall -y onnxruntime 2>&1 >&2
     # The two wheels share the onnxruntime/ namespace, so uninstalling one
@@ -30,7 +32,7 @@ if python3 -c "import importlib.metadata as m; m.version('onnxruntime'); m.versi
 fi
 
 # Warn if GPU is available but only CPU provider is installed.
-python3 -c "
+"$PYTHON" -c "
 import onnxruntime as ort, sys
 providers = ort.get_available_providers()
 gpu_providers = [p for p in providers if p != 'CPUExecutionProvider']
@@ -65,4 +67,4 @@ else:
             print('  Install: pip install onnxruntime-gpu  (NVIDIA CUDA)', file=sys.stderr)
 " 2>/dev/null || true
 
-exec python3 "$SCRIPT_DIR/bench.py" "$MODEL"
+exec "$PYTHON" "$SCRIPT_DIR/bench.py" "$MODEL"

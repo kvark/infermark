@@ -194,7 +194,10 @@ fn framework_md_link(name: &str, extra: &serde_json::Map<String, serde_json::Val
 
 fn project_root(cli_root: Option<&Path>) -> PathBuf {
     if let Some(r) = cli_root {
-        return std::fs::canonicalize(r).unwrap_or_else(|_| r.to_path_buf());
+        // Don't canonicalize — on Windows, std::fs::canonicalize returns paths
+        // with the `\\?\` extended-length prefix, which git-bash's bash cannot
+        // open. Callers already pass an absolute path.
+        return r.to_path_buf();
     }
     let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("."));
     let mut dir = exe.parent().unwrap_or(Path::new(".")).to_path_buf();
@@ -267,7 +270,7 @@ fn run_framework(root: &Path, framework: &str, model: &str, dry_run: bool) -> Fr
         return FrameworkOutcome::Error {
             framework: framework.to_string(),
             model: model.to_string(),
-            error: format!("exit {}: {}", output.status, stderr_short),
+            error: format!("{}: {}", output.status, stderr_short),
         };
     }
 
@@ -626,7 +629,27 @@ fn main() {
         println!("{}", serde_json::to_string_pretty(&outcomes).unwrap());
     } else {
         print_table(&outcomes, &successes);
+        // Dump each framework error to stderr so users can see what failed
+        // instead of staring at a wall of ✗.
+        let mut printed_header = false;
+        for outcome in &outcomes {
+            if let FrameworkOutcome::Error {
+                framework, error, ..
+            } = outcome
+            {
+                if !printed_header {
+                    eprintln!();
+                    eprintln!("=== Framework errors ===");
+                    printed_header = true;
+                }
+                eprintln!("[{framework}] {error}");
+            }
+        }
     }
+
+    // Save results even when everything fails — the per-framework JSON captures
+    // the stderr excerpt, which is often the only record of what went wrong.
+    save_results(&root, &cli.model, &outcomes);
 
     if successes.is_empty() {
         eprintln!("No successful benchmark results.");
@@ -634,5 +657,4 @@ fn main() {
     }
 
     compare_outputs(&successes);
-    save_results(&root, &cli.model, &outcomes);
 }

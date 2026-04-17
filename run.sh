@@ -3,8 +3,45 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# --- Platform flags (Windows via git bash = MINGW/MSYS) ---
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) IS_WINDOWS=true ;;
+    *)                    IS_WINDOWS=false ;;
+esac
+EXE_SUFFIX=""
+$IS_WINDOWS && EXE_SUFFIX=".exe"
+
+# --- Pick a Python interpreter ---
+# 1. Honor $VIRTUAL_ENV if set (user activated a venv).
+# 2. On Windows, prefer `python` — venvs don't ship a `python3` shim, so
+#    `python3` falls through to the Store shim, which has none of our packages.
+# 3. On Linux/macOS, prefer `python3`.
+if [ -n "${VIRTUAL_ENV:-}" ]; then
+    if [ -x "$VIRTUAL_ENV/bin/python" ]; then
+        PYTHON="$VIRTUAL_ENV/bin/python"
+    elif [ -x "$VIRTUAL_ENV/Scripts/python.exe" ]; then
+        PYTHON="$VIRTUAL_ENV/Scripts/python.exe"
+    fi
+fi
+if [ -z "${PYTHON:-}" ]; then
+    if $IS_WINDOWS; then
+        if command -v python &>/dev/null; then PYTHON=python
+        elif command -v python3 &>/dev/null; then PYTHON=python3
+        else echo "Python not found on PATH (need python or python3)" >&2; exit 1; fi
+    else
+        if command -v python3 &>/dev/null; then PYTHON=python3
+        elif command -v python &>/dev/null; then PYTHON=python
+        else echo "Python not found on PATH (need python3 or python)" >&2; exit 1; fi
+    fi
+fi
+export PYTHON
+
 # --- Expose CUDA libraries bundled by pip packages (e.g. nvidia-cublas-cu12) ---
-NVIDIA_LIBS=$(python3 -c "
+# Linux-only: Windows pip wheels ship CUDA DLLs in site-packages/nvidia/*/bin
+# and the runtime loader is PATH, not LD_LIBRARY_PATH. Torch/ORT wheels on
+# Windows handle DLL discovery themselves, so this block is a no-op there.
+if ! $IS_WINDOWS; then
+    NVIDIA_LIBS=$("$PYTHON" -c "
 import os, site
 for d in site.getsitepackages():
     nv = os.path.join(d, 'nvidia')
@@ -14,12 +51,14 @@ for d in site.getsitepackages():
             if os.path.isdir(lib):
                 print(lib)
 " 2>/dev/null | paste -sd: -)
-if [ -n "$NVIDIA_LIBS" ]; then
-    export LD_LIBRARY_PATH="${NVIDIA_LIBS}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    if [ -n "$NVIDIA_LIBS" ]; then
+        export LD_LIBRARY_PATH="${NVIDIA_LIBS}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    fi
 fi
 
 # --- Prefer discrete NVIDIA GPU over integrated GPU for Vulkan ---
-if [ -z "${VK_ICD_FILENAMES:-}" ]; then
+# Linux-only: Windows picks the Vulkan ICD via the registry, not filesystem paths.
+if ! $IS_WINDOWS && [ -z "${VK_ICD_FILENAMES:-}" ]; then
     NVIDIA_ICD=$(find /usr/share/vulkan/icd.d /etc/vulkan/icd.d -name '*nvidia*' 2>/dev/null | head -1)
     if [ -n "$NVIDIA_ICD" ]; then
         export VK_ICD_FILENAMES="$NVIDIA_ICD"
@@ -114,11 +153,11 @@ fi
 # --- Platform detection ---
 detect_platform() {
     # GPU name is the most distinctive — try that first.
-    if python3 -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
-        python3 -c "import torch; print(torch.cuda.get_device_name(0))" 2>/dev/null
+    if "$PYTHON" -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
+        "$PYTHON" -c "import torch; print(torch.cuda.get_device_name(0))" 2>/dev/null
         return
     fi
-    if python3 -c "import torch; assert hasattr(torch.backends,'mps') and torch.backends.mps.is_available()" 2>/dev/null; then
+    if "$PYTHON" -c "import torch; assert hasattr(torch.backends,'mps') and torch.backends.mps.is_available()" 2>/dev/null; then
         # macOS with MPS — use chip name
         sysctl -n machdep.cpu.brand_string 2>/dev/null | sed 's/.*\(Apple M[0-9]*[^ ]*\).*/\1/' || echo "Apple Silicon"
         return
@@ -134,6 +173,14 @@ detect_platform() {
     # Fall back to CPU model name.
     if [ "$(uname -s)" = "Darwin" ]; then
         sysctl -n machdep.cpu.brand_string 2>/dev/null || echo "Apple $(uname -m)"
+    elif $IS_WINDOWS; then
+        # WMIC is deprecated but still present; fall back to PowerShell.
+        local name
+        name=$(wmic cpu get name /value 2>/dev/null | tr -d '\r' | sed -n 's/^Name=//p' | head -1)
+        if [ -z "$name" ] && command -v powershell &>/dev/null; then
+            name=$(powershell -NoProfile -Command "(Get-CimInstance Win32_Processor).Name" 2>/dev/null | tr -d '\r' | head -1)
+        fi
+        echo "$name" | sed 's/  */ /g; s/(R)//g; s/(TM)//g; s/CPU //g' | xargs
     else
         grep "model name" /proc/cpuinfo 2>/dev/null | head -1 | sed 's/.*: //' | sed 's/  */ /g' | sed 's/(R)//g; s/(TM)//g; s/CPU //g' | xargs
     fi
@@ -142,7 +189,7 @@ detect_platform() {
 # Check if a platform name exists in any model markdown file.
 platform_exists_in_md() {
     local platform="$1"
-    python3 -c "
+    "$PYTHON" -c "
 import sys, os
 sys.path.insert(0, os.path.join('$ROOT_DIR', 'scripts'))
 from update_results import find_results_table, group_by_platform, _platforms_match
@@ -170,11 +217,11 @@ run_check() {
     # Python frameworks
     check_python() {
         local name="$1" mod="$2" extra="${3:-}"
-        if python3 -c "import $mod" 2>/dev/null; then
-            ver=$(python3 -c "import $mod; print(getattr($mod, '__version__', 'unknown'))" 2>/dev/null)
+        if "$PYTHON" -c "import $mod" 2>/dev/null; then
+            ver=$("$PYTHON" -c "import $mod; print(getattr($mod, '__version__', 'unknown'))" 2>/dev/null)
             echo "  ✓ $name ($ver)$extra"
         else
-            echo "  ✗ $name — python3 -c 'import $mod' failed (pip install $mod)"
+            echo "  ✗ $name — "$PYTHON" -c 'import $mod' failed (pip install $mod)"
         fi
     }
 
@@ -210,9 +257,9 @@ run_check() {
     echo "  GPU-aware frameworks:"
 
     # ONNX Runtime
-    if python3 -c "import onnxruntime" 2>/dev/null; then
-        ver=$(python3 -c "import onnxruntime; print(onnxruntime.__version__)" 2>/dev/null)
-        gpu=$(python3 -c "
+    if "$PYTHON" -c "import onnxruntime" 2>/dev/null; then
+        ver=$("$PYTHON" -c "import onnxruntime; print(onnxruntime.__version__)" 2>/dev/null)
+        gpu=$("$PYTHON" -c "
 import onnxruntime as ort
 providers = [p for p in ort.get_available_providers() if p != 'CPUExecutionProvider']
 print(', '.join(providers) if providers else 'CPU only')
@@ -231,9 +278,9 @@ print(', '.join(providers) if providers else 'CPU only')
     fi
 
     # JAX
-    if python3 -c "import jax" 2>/dev/null; then
-        ver=$(python3 -c "import jax; print(jax.__version__)" 2>/dev/null)
-        backend=$(python3 -c "import jax; print(jax.default_backend())" 2>/dev/null)
+    if "$PYTHON" -c "import jax" 2>/dev/null; then
+        ver=$("$PYTHON" -c "import jax; print(jax.__version__)" 2>/dev/null)
+        backend=$("$PYTHON" -c "import jax; print(jax.default_backend())" 2>/dev/null)
         echo "    ✓ JAX ($ver) — backend: $backend"
         if [ "$backend" = "cpu" ]; then
             case "$GPU_TYPE" in
@@ -250,24 +297,32 @@ print(', '.join(providers) if providers else 'CPU only')
     # GGML backends (llama.cpp, whisper.cpp)
     echo ""
     echo "  GGML backends:"
-    if python3 -c "import llama_cpp" 2>/dev/null; then
-        ver=$(python3 -c "import llama_cpp; print(getattr(llama_cpp, '__version__', 'unknown'))" 2>/dev/null)
-        gpu=$(python3 -c "
+    if "$PYTHON" -c "import llama_cpp" 2>/dev/null; then
+        ver=$("$PYTHON" -c "import llama_cpp; print(getattr(llama_cpp, '__version__', 'unknown'))" 2>/dev/null)
+        gpu=$("$PYTHON" -c "
 from llama_cpp import llama_supports_gpu_offload
 print('GPU offload' if llama_supports_gpu_offload() else 'CPU only')
 " 2>/dev/null)
         echo "    ✓ llama.cpp ($ver via llama-cpp-python) — $gpu"
         if [ "$gpu" = "CPU only" ]; then
             echo "      ↳ The ggml runner will auto-rebuild with GPU support on first run."
-            echo "      ↳ Requires: apt install libvulkan-dev glslc  (Vulkan, preferred)"
-            echo "      ↳      or:  apt install nvidia-cuda-toolkit  (CUDA, needs ≥12.8 for Blackwell)"
+            if $IS_WINDOWS; then
+                echo "      ↳ Requires: Vulkan SDK (https://vulkan.lunarg.com) or CUDA Toolkit (https://developer.nvidia.com/cuda-downloads)"
+            else
+                echo "      ↳ Requires: apt install libvulkan-dev glslc  (Vulkan, preferred)"
+                echo "      ↳      or:  apt install nvidia-cuda-toolkit  (CUDA, needs ≥12.8 for Blackwell)"
+            fi
         fi
     else
         # Diagnose import failure — could be missing CUDA runtime.
-        llama_err=$(python3 -c "import llama_cpp" 2>&1 || true)
+        llama_err=$("$PYTHON" -c "import llama_cpp" 2>&1 || true)
         if echo "$llama_err" | grep -q "libcudart"; then
             echo "    ✗ llama.cpp — installed with CUDA but libcudart not found"
+            if $IS_WINDOWS; then
+            echo "      ↳ Install CUDA Toolkit (https://developer.nvidia.com/cuda-downloads)"
+        else
             echo "      ↳ apt install libcudart12  (or install the full CUDA Toolkit)"
+        fi
             echo "      ↳ or: pip install llama-cpp-python --force-reinstall  (to get CPU-only build)"
         elif echo "$llama_err" | grep -q "libcuda\|libnvidia\|libcuBLAS"; then
             echo "    ✗ llama.cpp — installed with CUDA but missing runtime library"
@@ -276,8 +331,8 @@ print('GPU offload' if llama_supports_gpu_offload() else 'CPU only')
             echo "    ✗ llama.cpp — pip install llama-cpp-python"
         fi
     fi
-    if python3 -c "import faster_whisper" 2>/dev/null; then
-        ver=$(python3 -c "import faster_whisper; print(faster_whisper.__version__)" 2>/dev/null)
+    if "$PYTHON" -c "import faster_whisper" 2>/dev/null; then
+        ver=$("$PYTHON" -c "import faster_whisper; print(faster_whisper.__version__)" 2>/dev/null)
         echo "    ✓ whisper.cpp ($ver via faster-whisper)"
     else
         echo "    ~ whisper.cpp — not installed (pip install faster-whisper)"
@@ -315,8 +370,8 @@ print('GPU offload' if llama_supports_gpu_offload() else 'CPU only')
 
     # GPU backends
     echo "GPU backends:"
-    if python3 -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
-        dev=$(python3 -c "import torch; print(torch.cuda.get_device_name(0))" 2>/dev/null)
+    if "$PYTHON" -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
+        dev=$("$PYTHON" -c "import torch; print(torch.cuda.get_device_name(0))" 2>/dev/null)
         echo "  ✓ CUDA ($dev)"
     else
         echo "  ✗ CUDA — torch.cuda.is_available() is False"
@@ -337,12 +392,16 @@ print('GPU offload' if llama_supports_gpu_offload() else 'CPU only')
     if [ "$(uname -s)" = "Darwin" ]; then
         echo "  ✓ Metal (macOS detected)"
     fi
-    if command -v nvcc &>/dev/null || [ -d /usr/local/cuda ]; then
+    if command -v nvcc &>/dev/null || [ -d /usr/local/cuda ] || [ -n "${CUDA_PATH:-}" ]; then
         nvcc_ver=$(nvcc --version 2>/dev/null | grep "release" | sed 's/.*release //' | sed 's/,.*//')
         echo "  ✓ CUDA Toolkit (nvcc ${nvcc_ver:-found}) — needed for candle, luminal"
-    elif python3 -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
+    elif "$PYTHON" -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
         echo "  ✗ CUDA Toolkit (nvcc) — needed to build candle/luminal with CUDA"
-        echo "    ↳ apt install nvidia-cuda-toolkit"
+        if $IS_WINDOWS; then
+            echo "    ↳ Install CUDA Toolkit (https://developer.nvidia.com/cuda-downloads)"
+        else
+            echo "    ↳ apt install nvidia-cuda-toolkit"
+        fi
     fi
 
     echo ""
@@ -405,7 +464,7 @@ else
     cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml" --workspace --exclude inferena-inferi 2>&1 >&2
 fi
 
-HARNESS="$ROOT_DIR/target/release/inferena"
+HARNESS="$ROOT_DIR/target/release/inferena${EXE_SUFFIX}"
 
 # --- Run each model ---
 for MODEL in $MODELS; do

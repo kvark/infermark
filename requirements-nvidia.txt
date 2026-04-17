@@ -1,3 +1,8 @@
+# Pull CUDA-enabled torch wheels (the `+cu128` local version outranks the
+# plain CPU wheel on PyPI, so pip picks the CUDA build even with `torch>=2.0`
+# in requirements-common.txt). Works for Ampere (30xx), Ada (40xx), Blackwell (50xx+).
+--extra-index-url https://download.pytorch.org/whl/cu128
+
 -r requirements-common.txt
 
 # NVIDIA CUDA
@@ -10,5 +15,5 @@ jax[cuda12]
 
 # Note: llama-cpp-python ships as a CPU-only wheel. The ggml runner auto-rebuilds
 # it with Vulkan (preferred) or CUDA on first run.
-# Vulkan: apt install libvulkan-dev glslc
-# CUDA:   apt install nvidia-cuda-toolkit  (must be ≥12.8 for Blackwell GPUs)
+# Linux: apt install libvulkan-dev glslc  (or nvidia-cuda-toolkit ≥12.8 for Blackwell)
+# Windows: install Vulkan SDK (https://vulkan.lunarg.com) or CUDA Toolkit

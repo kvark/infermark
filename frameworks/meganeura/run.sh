@@ -14,4 +14,5 @@ export FRAMEWORK_REV=$(cargo_rev_short meganeura "$ROOT_DIR")
 echo "[meganeura] Building release binary..." >&2
 cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml" -p inferena-meganeura 2>&1 >&2
 
-exec "$ROOT_DIR/target/release/inferena-meganeura" "$MODEL"
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) EXE=.exe ;; *) EXE= ;; esac
+exec "$ROOT_DIR/target/release/inferena-meganeura${EXE}" "$MODEL"
