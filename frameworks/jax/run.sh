@@ -60,7 +60,13 @@ print('ok')
 " 2>&1) || _JAX_CUDA_OK="fail"
 
     if ! echo "$_JAX_CUDA_OK" | grep -q "^ok$"; then
-        echo "[jax] CUDA backend crashed (likely GPU too new for installed jaxlib PTX) — falling back to CPU" >&2
+        echo "[jax] CUDA backend crashed — falling back to CPU" >&2
+        if echo "$_JAX_CUDA_OK" | grep -q "PTX version"; then
+            echo "  Cause: jaxlib's bundled LLVM emits a PTX version older than your GPU requires." >&2
+            echo "  (Blackwell / sm_120+ needs PTX 8.7 — current jaxlib 0.10 ships PTX 8.4.)" >&2
+            echo "  Workaround: wait for a jaxlib release built against a newer LLVM, or use CUDA-native" >&2
+            echo "  frameworks (PyTorch / ONNX Runtime) for now." >&2
+        fi
         export JAX_PLATFORMS="cpu"
     fi
 fi
