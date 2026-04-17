@@ -594,10 +594,17 @@ def bench(model_name: str, spec: dict):
     load_ms = (time.perf_counter() - t0) * 1000.0
     print(f"[pytorch] loaded in {load_ms:.0f}ms", file=sys.stderr)
 
-    # --- torch.compile (skip on MPS — poorly supported, adds overhead) ---
+    # --- torch.compile ---
+    # Skip on MPS (poorly supported, adds overhead) and on Windows
+    # (CPU path needs MSVC cl.exe; CUDA path needs Triton, which has no
+    # official Windows wheels). Eager mode still runs so correctness
+    # comparisons against other frameworks remain valid.
     if dev == "mps":
         compile_s = 0.0
         print("[pytorch] skipping torch.compile on MPS (not well supported)", file=sys.stderr)
+    elif sys.platform == "win32":
+        compile_s = 0.0
+        print("[pytorch] skipping torch.compile on Windows (Triton unsupported)", file=sys.stderr)
     else:
         print("[pytorch] compiling with torch.compile()...", file=sys.stderr)
         clear_compile_cache()

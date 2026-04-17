@@ -718,8 +718,7 @@ fn bench_resnet() {
             let mut buf = vec![0.0f32; n];
             for i in 0..out_dim {
                 for j in 0..in_dim {
-                    buf[j * out_dim + i] =
-                        ((i * in_dim + j) as f32 * 0.01 + seed).sin() * scale;
+                    buf[j * out_dim + i] = ((i * in_dim + j) as f32 * 0.01 + seed).sin() * scale;
                 }
             }
             buf

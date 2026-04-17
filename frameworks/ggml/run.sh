@@ -8,6 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 MODEL="${1:-SmolLM2-135M}"
 
+: "${PYTHON:?must be set by run.sh}"
+
 # --- Model routing ---
 case "$MODEL" in
     SmolLM2-135M)
@@ -42,13 +44,13 @@ _gpu_rebuild_hint() {
 
 # --- Check dependencies per backend ---
 if [ "$BACKEND" = "llama.cpp" ]; then
-    if ! python3 -c "import llama_cpp" 2>/dev/null; then
+    if ! "$PYTHON" -c "import llama_cpp" 2>/dev/null; then
         echo "[ggml] llama-cpp-python not found. Install via: pip install llama-cpp-python" >&2
         _gpu_rebuild_hint
         exit 1
     fi
     # Auto-rebuild llama-cpp-python with GPU support if needed.
-    _GGML_GPU_OK=$(python3 -c "
+    _GGML_GPU_OK=$("$PYTHON" -c "
 from llama_cpp import llama_supports_gpu_offload
 print('yes' if llama_supports_gpu_offload() else 'no')
 " 2>/dev/null) || _GGML_GPU_OK="no"
@@ -73,7 +75,7 @@ print('yes' if llama_supports_gpu_offload() else 'no')
         fi
     fi
 elif [ "$BACKEND" = "whisper.cpp" ]; then
-    if ! python3 -c "import faster_whisper" 2>/dev/null; then
+    if ! "$PYTHON" -c "import faster_whisper" 2>/dev/null; then
         echo "[ggml] faster-whisper not found. Install via: pip install faster-whisper" >&2
         exit 1
     fi
@@ -94,7 +96,7 @@ if [ "$BACKEND" = "llama.cpp" ]; then
         echo "[ggml] converting safetensors to GGUF..." >&2
         SAFETENSORS="$MODEL_DIR/model.safetensors"
         if [ ! -f "$SAFETENSORS" ]; then
-            HF_PATH=$(python3 -c "
+            HF_PATH=$("$PYTHON" -c "
 from huggingface_hub import snapshot_download
 ids = {'SmolLM2-135M': 'HuggingFaceTB/SmolLM2-135M'}
 hf_id = ids.get('$MODEL')
@@ -110,13 +112,13 @@ if hf_id:
             fi
         fi
         mkdir -p "$(dirname "$GGUF_FILE")"
-        python3 "$SCRIPT_DIR/convert_to_gguf.py" "$MODEL_DIR" "$GGUF_FILE" 2>&1 >&2
+        "$PYTHON" "$SCRIPT_DIR/convert_to_gguf.py" "$MODEL_DIR" "$GGUF_FILE" 2>&1 >&2
     fi
 
-    exec python3 "$SCRIPT_DIR/bench.py" "$MODEL" "$GGUF_FILE"
+    exec "$PYTHON" "$SCRIPT_DIR/bench.py" "$MODEL" "$GGUF_FILE"
 fi
 
 # --- Whisper-tiny via whisper.cpp ---
 if [ "$BACKEND" = "whisper.cpp" ]; then
-    exec python3 "$SCRIPT_DIR/bench_whisper.py"
+    exec "$PYTHON" "$SCRIPT_DIR/bench_whisper.py"
 fi

@@ -12,9 +12,11 @@ export FRAMEWORK_REV=$(cargo_rev_short candle-core "$ROOT_DIR")
 
 # Select GPU backend based on platform.
 FEATURES=""
+EXE=""
 case "$(uname -s)" in
-    Linux*)
-        if command -v nvcc &>/dev/null || [ -d /usr/local/cuda ]; then
+    Linux*|MINGW*|MSYS*|CYGWIN*)
+        case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) EXE=.exe ;; esac
+        if command -v nvcc &>/dev/null || [ -d /usr/local/cuda ] || [ -n "${CUDA_PATH:-}" ]; then
             FEATURES="--features cuda"
             # Auto-detect max supported compute capability for nvcc.
             # Distro nvcc may be older than the installed GPU (e.g. nvcc 12.4 vs Blackwell).
@@ -38,4 +40,4 @@ esac
 echo "[candle] Building release binary... $FEATURES" >&2
 cargo build --release --manifest-path "$ROOT_DIR/Cargo.toml" -p inferena-candle $FEATURES 2>&1 >&2
 
-exec "$ROOT_DIR/target/release/inferena-candle" "$MODEL"
+exec "$ROOT_DIR/target/release/inferena-candle${EXE}" "$MODEL"

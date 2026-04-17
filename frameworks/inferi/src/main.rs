@@ -162,7 +162,11 @@ async fn forward_one_token(
     // Write configs and token embedding to GPU.
     let mut encoder = backend.begin_encoding();
     backend.write_buffer(state.rope_config_mut().buffer_mut(), 0, &[rope_config])?;
-    backend.write_buffer(state.rms_norm_config_mut().buffer_mut(), 0, &[rms_norm_config])?;
+    backend.write_buffer(
+        state.rms_norm_config_mut().buffer_mut(),
+        0,
+        &[rms_norm_config],
+    )?;
     backend.write_buffer(state.attn_params_mut().buffer_mut(), 0, &[attn_params])?;
     state
         .x
@@ -253,11 +257,7 @@ async fn bench_smollm2(model_name: &str) -> anyhow::Result<()> {
             &mut tensor_cache,
             pos as u32,
             token,
-            if read_logits {
-                Some(&mut logits)
-            } else {
-                None
-            },
+            if read_logits { Some(&mut logits) } else { None },
         )
         .await?;
     }

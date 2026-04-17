@@ -12,15 +12,7 @@ if [ "$(uname -s)" != "Darwin" ]; then
     exit 1
 fi
 
-# Use venv if it exists, otherwise try system python.
-if [ -d "$SCRIPT_DIR/.venv" ]; then
-    PYTHON="$SCRIPT_DIR/.venv/bin/python"
-elif command -v python3 &>/dev/null; then
-    PYTHON=python3
-else
-    echo "[mlx] python3 not found" >&2
-    exit 1
-fi
+: "${PYTHON:?must be set by run.sh}"
 
 # Check mlx is importable.
 if ! "$PYTHON" -c "import mlx.core" 2>/dev/null; then

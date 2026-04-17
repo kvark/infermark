@@ -6,8 +6,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MODEL="${1:-SmolLM2-135M}"
 
+: "${PYTHON:?must be set by run.sh}"
+
 # --- Check dependencies ---
-if ! python3 -c "import jax" 2>/dev/null; then
+if ! "$PYTHON" -c "import jax" 2>/dev/null; then
     echo "[jax] jax not found. Install via:" >&2
     echo "  pip install jax                       # CPU only" >&2
     echo "  pip install jax[cuda12]               # NVIDIA GPU" >&2
@@ -16,7 +18,7 @@ if ! python3 -c "import jax" 2>/dev/null; then
 fi
 
 # Log backend and warn if GPU is available but not used.
-python3 -c "
+"$PYTHON" -c "
 import jax, sys
 backend = jax.default_backend()
 print(f'[jax] backend: {backend}, devices: {jax.devices()}', file=sys.stderr)
@@ -49,8 +51,8 @@ if backend == 'cpu':
 
 # Pre-flight: detect if CUDA backend will crash (e.g. Blackwell GPU + old jaxlib PTX).
 # JAX's XLA compiler calls abort() on LLVM errors, so we must test in a subprocess.
-if python3 -c "import jax; exit(0 if jax.default_backend() == 'gpu' else 1)" 2>/dev/null; then
-    _JAX_CUDA_OK=$(timeout 15 python3 -c "
+if "$PYTHON" -c "import jax; exit(0 if jax.default_backend() == 'gpu' else 1)" 2>/dev/null; then
+    _JAX_CUDA_OK=$(timeout 15 "$PYTHON" -c "
 import jax
 x = jax.numpy.ones(1)
 _ = (x + x).block_until_ready()
@@ -63,4 +65,4 @@ print('ok')
     fi
 fi
 
-exec python3 "$SCRIPT_DIR/bench.py" "$MODEL"
+exec "$PYTHON" "$SCRIPT_DIR/bench.py" "$MODEL"
