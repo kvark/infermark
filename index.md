@@ -3,6 +3,12 @@ layout: default
 title: Results
 ---
 
+Inference Arena runs the same training and inference workload through every
+supported ML framework on every available platform, then publishes the
+results side by side. Each tab below covers one model — pick your model,
+filter to the frameworks you care about, and compare. Lower numbers are
+better; **bold** marks the best matching framework on each platform.
+
 <div class="tabs">
   <input type="radio" name="model" id="tab-smollm2" value="panel-smollm2" checked>
   <label for="tab-smollm2">SmolLM2-135M</label>

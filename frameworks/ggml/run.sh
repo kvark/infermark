@@ -44,34 +44,54 @@ _gpu_rebuild_hint() {
 
 # --- Check dependencies per backend ---
 if [ "$BACKEND" = "llama.cpp" ]; then
-    if ! "$PYTHON" -c "import llama_cpp" 2>/dev/null; then
+    # Importing llama_cpp on Windows needs torch's bundled CUDA DLLs visible
+    # (prebuilt CUDA wheels link against cudart/cublas). bench.py adds them
+    # before the import; mirror that here so the dependency check matches.
+    _LLAMA_IMPORT_PROBE='
+import os, sys
+if sys.platform == "win32":
+    try:
+        import torch
+        torch_lib = os.path.join(os.path.dirname(torch.__file__), "lib")
+        if os.path.isdir(torch_lib):
+            os.add_dll_directory(torch_lib)
+    except ImportError:
+        pass
+from llama_cpp import llama_supports_gpu_offload
+print("yes" if llama_supports_gpu_offload() else "no")
+'
+    if ! _GGML_GPU_OK=$("$PYTHON" -c "$_LLAMA_IMPORT_PROBE" 2>/dev/null); then
         echo "[ggml] llama-cpp-python not found. Install via: pip install llama-cpp-python" >&2
         _gpu_rebuild_hint
         exit 1
     fi
-    # Auto-rebuild llama-cpp-python with GPU support if needed.
-    _GGML_GPU_OK=$("$PYTHON" -c "
-from llama_cpp import llama_supports_gpu_offload
-print('yes' if llama_supports_gpu_offload() else 'no')
-" 2>/dev/null) || _GGML_GPU_OK="no"
 
     if [ "$_GGML_GPU_OK" = "no" ]; then
-        # Detect which GPU backend to compile for.
-        # Prefer Vulkan on Linux (works with any GPU vendor, no nvcc version issues).
-        # CUDA requires nvcc matching the GPU arch, which distro packages often lag.
-        _CMAKE_BACKEND=""
-        if [ "$(uname -s)" = "Darwin" ]; then
-            _CMAKE_BACKEND="-DGGML_METAL=ON"
-        elif command -v vulkaninfo &>/dev/null && dpkg -l libvulkan-dev &>/dev/null 2>&1; then
-            _CMAKE_BACKEND="-DGGML_VULKAN=ON"
-        elif command -v nvcc &>/dev/null || [ -d /usr/local/cuda ]; then
-            _CMAKE_BACKEND="-DGGML_CUDA=ON"
-        fi
-
-        if [ -n "$_CMAKE_BACKEND" ]; then
-            echo "[ggml] llama-cpp-python lacks GPU support — rebuilding with ${_CMAKE_BACKEND}..." >&2
-            CMAKE_ARGS="$_CMAKE_BACKEND" pip install llama-cpp-python --force-reinstall --no-cache-dir 2>&1 >&2
-            echo "[ggml] rebuild complete." >&2
+        # Detect which GPU backend to compile for. Vulkan first (portable,
+        # no nvcc version pinning); CUDA if a toolkit is visible.
+        _IS_WINDOWS=false
+        case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) _IS_WINDOWS=true ;; esac
+        if $_IS_WINDOWS; then
+            # Building from source on Windows needs an MSVC dev environment
+            # (vcvars64.bat) sourced into the shell, which is fiddly to do
+            # from git-bash. Recommend the prebuilt CUDA wheel instead.
+            echo "[ggml] llama-cpp-python is CPU-only. For GPU on Windows install a prebuilt CUDA wheel:" >&2
+            echo '       pip install "llama-cpp-python==0.3.4" --extra-index-url=https://abetlen.github.io/llama-cpp-python/whl/cu124 --force-reinstall' >&2
+            echo "       (the bench loads PyTorch's bundled cudart/cublas DLLs at runtime)" >&2
+        else
+            _CMAKE_BACKEND=""
+            if [ "$(uname -s)" = "Darwin" ]; then
+                _CMAKE_BACKEND="-DGGML_METAL=ON"
+            elif command -v vulkaninfo &>/dev/null && dpkg -l libvulkan-dev &>/dev/null 2>&1; then
+                _CMAKE_BACKEND="-DGGML_VULKAN=ON"
+            elif command -v nvcc &>/dev/null || [ -d /usr/local/cuda ]; then
+                _CMAKE_BACKEND="-DGGML_CUDA=ON"
+            fi
+            if [ -n "$_CMAKE_BACKEND" ]; then
+                echo "[ggml] llama-cpp-python lacks GPU support — rebuilding with ${_CMAKE_BACKEND}..." >&2
+                CMAKE_ARGS="$_CMAKE_BACKEND" "$PYTHON" -m pip install llama-cpp-python --force-reinstall --no-cache-dir 2>&1 >&2
+                echo "[ggml] rebuild complete." >&2
+            fi
         fi
     fi
 elif [ "$BACKEND" = "whisper.cpp" ]; then

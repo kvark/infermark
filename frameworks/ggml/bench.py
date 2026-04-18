@@ -22,6 +22,18 @@ def main():
     model_name = sys.argv[1]
     gguf_path = sys.argv[2]
 
+    # On Windows, prebuilt CUDA wheels link against CUDA runtime DLLs that
+    # aren't on PATH. PyTorch's CUDA wheels bundle them in torch/lib — expose
+    # that directory so llama_cpp's CDLL load can resolve cudart/cublas.
+    if sys.platform == "win32":
+        try:
+            import torch
+            torch_lib = os.path.join(os.path.dirname(torch.__file__), "lib")
+            if os.path.isdir(torch_lib):
+                os.add_dll_directory(torch_lib)
+        except ImportError:
+            pass
+
     try:
         from llama_cpp import Llama
     except ImportError:
