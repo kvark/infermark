@@ -290,6 +290,26 @@ def clear_compile_cache():
             shutil.rmtree(d, ignore_errors=True)
 
 
+def capture_cuda_graph(fn, warmup: int = 3):
+    """Warm up fn on a side stream, then capture a no_grad replay graph.
+
+    Used when torch.compile is unavailable (Windows/Triton missing) to reclaim
+    the kernel-launch overhead that dominates small-model CUDA timings.
+    """
+    s = torch.cuda.Stream()
+    s.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(s), torch.no_grad():
+        for _ in range(warmup):
+            fn()
+    torch.cuda.current_stream().wait_stream(s)
+    torch.cuda.synchronize()
+
+    g = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(g), torch.no_grad():
+        fn()
+    return g
+
+
 # --- Model registry ---
 
 MODEL_REGISTRY = {
@@ -714,6 +734,45 @@ def bench(model_name: str, spec: dict):
         latency_ms = (time.perf_counter() - t0) * 1000.0
     else:
         latency_ms = 0.0
+
+    # --- CUDA graph replay (fallback when torch.compile is unavailable) ---
+    # On Windows Triton is missing, so we lose the graph-capture pass
+    # Inductor would do. Capturing a manual CUDA graph here closes most of
+    # that gap on inference + latency (the no_grad paths). Training stays
+    # eager — autograd-graph capture is a larger project.
+    if dev.startswith("cuda") and compile_s == 0.0:
+        if model_type == "sd_unet":
+            inf_fn = lambda: model(fwd_kwargs["noisy_latent"])
+        elif model_type == "resnet":
+            inf_fn = lambda: model(fwd_kwargs["images"])
+        elif model_type == "whisper":
+            inf_fn = lambda: model(fwd_kwargs["input_features"])
+        elif model_type == "causal_lm":
+            # Drop labels so the model returns logits only (no internal loss).
+            inf_kw = {k: v for k, v in fwd_kwargs.items() if k != "labels"}
+            inf_fn = lambda: model(**inf_kw)
+        else:  # smolvla
+            inf_fn = lambda: model(**fwd_kwargs)
+
+        try:
+            print("[pytorch] capturing CUDA graph for inference...", file=sys.stderr)
+            inf_graph = capture_cuda_graph(inf_fn)
+            sync()
+            t0 = time.perf_counter()
+            inf_graph.replay()
+            sync()
+            inference_ms = (time.perf_counter() - t0) * 1000.0
+
+            if lat_fn is not None:
+                print("[pytorch] capturing CUDA graph for latency...", file=sys.stderr)
+                lat_graph = capture_cuda_graph(lat_fn)
+                sync()
+                t0 = time.perf_counter()
+                lat_graph.replay()
+                sync()
+                latency_ms = (time.perf_counter() - t0) * 1000.0
+        except Exception as e:
+            print(f"[pytorch] CUDA graph capture failed ({e}); keeping eager timings", file=sys.stderr)
 
     # --- Collect outputs ---
     logits_hash = sha256_f32_tensor(logits)

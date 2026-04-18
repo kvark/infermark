@@ -32,12 +32,21 @@ jobs:
             name=$(basename "$f" .md | tr 'A-Z' 'a-z')
             model_name=$(basename "$f" .md)
             python3 - "$f" "$model_name" > "_includes/${name}.md" <<'PYEOF'
-          import sys
+          import re, sys
           path, model_name = sys.argv[1], sys.argv[2]
           text = open(path).read()
-          out = []
           parts = text.split('## ')
-          for p in parts:
+
+          # Intro: everything before the first ## section, with frontmatter and
+          # the H1 title stripped — leaves just the model description prose.
+          intro = re.sub(r'^---\n.*?\n---\n', '', parts[0], count=1, flags=re.DOTALL)
+          intro = re.sub(r'^\s*#\s+.*?\n', '', intro, count=1)
+          intro = intro.strip()
+
+          out = []
+          if intro:
+              out.append(intro)
+          for p in parts[1:]:
               if p.startswith('Results'):
                   out.append(p[len('Results'):].strip())
               elif p.startswith('Caveats'):
