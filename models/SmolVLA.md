@@ -29,16 +29,16 @@ Benchmark config: chunk_size=50, vlm_seq_len=16, float32, random weights, MSE lo
 | | [Meganeura](https://github.com/kvark/meganeura/tree/33dcf42) (Vulkan) | **0.51** | 15 | **6** | **35** | 0.01 |
 | | [GGML](https://github.com/ggerganov/ggml) | — | — | — | — | |
 | | [ONNX Runtime](https://github.com/microsoft/onnxruntime) (MIGraphXExecutionProvider) | 22.10 | **12** | — | — | 0.00 |
-| Apple M3 | [PyTorch 2.11.0](https://github.com/pytorch/pytorch/releases/tag/v2.11.0) (MPS) | 0.00 | 172 | 11 | 119 | 0.00 |
-| | [MLX](https://github.com/ml-explore/mlx) (MLX) | 0.00 | **13** | — | **24** | 0.00 |
+| Apple M3 | [PyTorch 2.11.0](https://github.com/pytorch/pytorch/releases/tag/v2.11.0) (MPS) | 0.00 | 173 | 9.7 | 115 | 0.00 |
+| | [MLX](https://github.com/ml-explore/mlx) (MLX) | 0.00 | **13** | — | **23** | 0.00 |
 | | [Candle](https://github.com/huggingface/candle) | — | — | — | — | |
 | | [Burn](https://github.com/tracel-ai/burn) | — | — | — | — | |
 | | [Inferi](https://github.com/dimforge/inferi) | ✗ | ✗ | ✗ | ✗ | |
 | | [Luminal](https://github.com/luminal-ai/luminal) | — | — | — | — | |
-| | [Meganeura](https://github.com/kvark/meganeura/tree/33dcf42) (Metal) | 0.77 | 37 | **8** | 149 | 0.01 |
+| | [Meganeura](https://github.com/kvark/meganeura/tree/d1e6865) (Metal) | 0.13 | 32 | **8.9** | 79 | 0.00 |
 | | [GGML](https://github.com/ggerganov/ggml) | — | — | — | — | |
-| | [ONNX Runtime](https://github.com/microsoft/onnxruntime) (CoreMLExecutionProvider) | 7.13 | 84 | — | — | 0.00 |
-| | [JAX](https://github.com/jax-ml/jax) (METAL) | 2.06 | 23 | — | 96 | 0.00 |
+| | [ONNX Runtime](https://github.com/microsoft/onnxruntime) (CoreMLExecutionProvider) | 6.69 | 80 | — | — | 0.00 |
+| | [JAX](https://github.com/jax-ml/jax) (METAL) | 0.99 | 14 | — | 116 | 0.00 |
 | NVIDIA GeForce RTX 5080 | [PyTorch 2.11.0+cu130](https://github.com/pytorch/pytorch/releases/tag/v2.11.0) (CUDA 13.0) | 9.47 | 2.7 | 2.9 | **5.5** | 0.00 |
 | | [Candle](https://github.com/huggingface/candle) | — | — | — | — | |
 | | [Burn](https://github.com/tracel-ai/burn) | — | — | — | — | |
