@@ -27,15 +27,15 @@ Benchmark config: seq_len=128, float32, input=[0,1,...,127].
 | | [Inferi](https://github.com/dimforge/inferi) | ✗ | ✗ | ✗ | ✗ | |
 | | [Meganeura](https://github.com/kvark/meganeura/tree/33dcf42) (Vulkan) | 1.41 | **34** | **12** | **87** | 8.64 |
 | | [ONNX Runtime](https://github.com/microsoft/onnxruntime) | ✗ | ✗ | ✗ | ✗ | |
-| Apple M3 | [PyTorch 2.11.0](https://github.com/pytorch/pytorch/releases/tag/v2.11.0) (MPS) | 0.00 | 247 | 34 | 432 | 8.35 |
-| | [MLX](https://github.com/ml-explore/mlx) (MLX) | 0.00 | 77 | — | **250** | 8.64 |
-| | [Candle](https://github.com/huggingface/candle/tree/6b4d8a1) (Metal) | ~~0.02~~ | ~~19~~ | ~~2~~ | ~~—~~ | ~~10.80~~ |
-| | [Burn](https://github.com/tracel-ai/burn/tree/ed72d2b) (wgpu/metal) | ~~0.00~~ | ~~544~~ | ~~42~~ | ~~552~~ | ~~11.77~~ |
+| Apple M3 | [PyTorch 2.11.0](https://github.com/pytorch/pytorch/releases/tag/v2.11.0) (MPS) | 0.00 | 200 | 21 | 335 | 8.35 |
+| | [MLX](https://github.com/ml-explore/mlx) (MLX) | 0.00 | **40** | — | **94** | 8.64 |
+| | [Candle](https://github.com/huggingface/candle/tree/6b4d8a1) (Metal) | ~~0.02~~ | ~~19~~ | ~~2.0~~ | ~~—~~ | ~~10.80~~ |
+| | [Burn](https://github.com/tracel-ai/burn/tree/ed72d2b) (wgpu/metal) | ~~0.00~~ | ~~621~~ | ~~52~~ | ~~556~~ | ~~11.57~~ |
 | | [Inferi](https://github.com/dimforge/inferi) | ✗ | ✗ | ✗ | ✗ | |
 | | [Luminal](https://github.com/luminal-ai/luminal) | ✗ | ✗ | ✗ | ✗ | |
-| | [Meganeura](https://github.com/kvark/meganeura/tree/33dcf42) (Metal) | 3.01 | 62 | 10 | 601 | 8.64 |
-| | [GGML](https://github.com/ggerganov/ggml/tree/0.3.20) (Metal) | 0.37 | **52** | **8** | — | 8.69 |
-| | [JAX](https://github.com/jax-ml/jax) (METAL) | ~~2.88~~ | ~~59~~ | ~~20~~ | ~~191~~ | ~~5.79~~ |
+| | [Meganeura](https://github.com/kvark/meganeura/tree/d1e6865) (Metal) | 0.93 | 92 | **7.8** | 330 | 8.67 |
+| | [GGML](https://github.com/ggerganov/ggml/tree/0.3.20) (Metal) | 0.39 | 47 | 8.5 | — | 8.69 |
+| | [JAX](https://github.com/jax-ml/jax) (METAL) | ~~2.85~~ | ~~71~~ | ~~17~~ | ~~181~~ | ~~5.79~~ |
 | NVIDIA GeForce RTX 5080 | [PyTorch 2.11.0+cu130](https://github.com/pytorch/pytorch/releases/tag/v2.11.0) (CUDA 13.0) | 18.04 | **3.9** | 3.8 | **6.6** | 8.35 |
 | | [Candle](https://github.com/huggingface/candle/tree/6b4d8a1) (CUDA) | ~~0.04~~ | ~~29~~ | ~~2.5~~ | ~~—~~ | ~~10.80~~ |
 | | [Burn](https://github.com/tracel-ai/burn/tree/ed72d2b) (wgpu/vulkan) | ~~0.00~~ | ~~117~~ | ~~28~~ | ~~110~~ | ~~11.68~~ |

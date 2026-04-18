@@ -27,16 +27,16 @@ Benchmark config: batch=4, 3x224x224, float32, random weights, cross-entropy los
 | | [Meganeura](https://github.com/kvark/meganeura/tree/33dcf42) (Vulkan) | 0.79 | 65 | 25 | 260 | 6.92 |
 | | [GGML](https://github.com/ggerganov/ggml) | — | — | — | — | |
 | | [ONNX Runtime](https://github.com/microsoft/onnxruntime) (MIGraphXExecutionProvider) | 3.12 | **28** | **10** | — | 6.92 |
-| Apple M3 | [PyTorch 2.11.0](https://github.com/pytorch/pytorch/releases/tag/v2.11.0) (MPS) | 0.00 | 475 | 21 | 310 | 6.92 |
+| Apple M3 | [PyTorch 2.11.0](https://github.com/pytorch/pytorch/releases/tag/v2.11.0) (MPS) | 0.00 | 168 | 28 | **324** | 6.92 |
 | | [MLX](https://github.com/ml-explore/mlx) | — | — | — | — | |
-| | [Candle](https://github.com/huggingface/candle/tree/6b4d8a1) (Metal) | 0.01 | 31 | 4 | — | 6.91 |
+| | [Candle](https://github.com/huggingface/candle/tree/6b4d8a1) (Metal) | 0.00 | 16 | 3.8 | — | 6.91 |
 | | [Burn](https://github.com/tracel-ai/burn) | — | — | — | — | |
 | | [Inferi](https://github.com/dimforge/inferi) | ✗ | ✗ | ✗ | ✗ | |
 | | [Luminal](https://github.com/luminal-ai/luminal) | — | — | — | — | |
-| | [Meganeura](https://github.com/kvark/meganeura/tree/33dcf42) (Metal) | 1.17 | 306 | 32 | 903 | 6.92 |
+| | [Meganeura](https://github.com/kvark/meganeura/tree/d1e6865) (Metal) | 0.33 | 240 | 33 | 873 | 6.92 |
 | | [GGML](https://github.com/ggerganov/ggml) | — | — | — | — | |
-| | [ONNX Runtime](https://github.com/microsoft/onnxruntime) (CoreMLExecutionProvider) | 4.75 | **6** | **2** | — | 6.92 |
-| | [JAX](https://github.com/jax-ml/jax) (METAL) | 3.26 | 30 | 21 | **153** | 6.92 |
+| | [ONNX Runtime](https://github.com/microsoft/onnxruntime) (CoreMLExecutionProvider) | 4.72 | **6.4** | **2.0** | — | 6.92 |
+| | [JAX](https://github.com/jax-ml/jax) (METAL) | 0.66 | 35 | 9.2 | 344 | 6.92 |
 | NVIDIA GeForce RTX 5080 | [PyTorch 2.11.0+cu130](https://github.com/pytorch/pytorch/releases/tag/v2.11.0) (CUDA 13.0) | 9.48 | 2.5 | 3.4 | **4.6** | 6.92 |
 | | [Candle](https://github.com/huggingface/candle/tree/6b4d8a1) (CUDA) | 0.00 | 63 | 2.8 | — | 6.91 |
 | | [Burn](https://github.com/tracel-ai/burn) | — | — | — | — | |
