@@ -98,6 +98,7 @@ fn all_frameworks() -> Vec<&'static str> {
         "meganeura",
         "ggml",
         "onnxruntime",
+        "max",
         "jax",
     ];
     if cfg!(target_os = "macos") {
@@ -118,6 +119,7 @@ fn framework_meta(name: &str) -> (&'static str, &'static str) {
         "inferi" => ("Inferi", "https://github.com/dimforge/inferi"),
         "ggml" => ("GGML", "https://github.com/ggerganov/ggml"),
         "onnxruntime" => ("ONNX Runtime", "https://github.com/microsoft/onnxruntime"),
+        "max" => ("MAX", "https://github.com/modular/modular"),
         "jax" => ("JAX", "https://github.com/jax-ml/jax"),
         _ => ("unknown", ""),
     }
@@ -181,6 +183,7 @@ fn framework_md_link(name: &str, extra: &serde_json::Map<String, serde_json::Val
             "mlx" => "MLX",
             "ggml" => "CPU",
             "onnxruntime" => "CPU",
+            "max" => "CPU",
             "jax" => "CPU",
             _ => "",
         };

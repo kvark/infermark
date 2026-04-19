@@ -141,7 +141,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -h, --help                Show this help"
             echo ""
             echo "Models: $ALL_MODELS"
-            echo "Frameworks: pytorch, candle, burn, inferi, luminal, meganeura, ggml, onnxruntime, jax, mlx"
+            echo "Frameworks: pytorch, candle, burn, inferi, luminal, meganeura, ggml, onnxruntime, max, jax, mlx"
             exit 0
             ;;
         *)
@@ -246,6 +246,7 @@ run_check() {
     check_python "transformers" "transformers" " (needed for Whisper-tiny)"
     check_python "safetensors" "safetensors" " (needed for JAX, llama.cpp weight loading)"
     check_python "huggingface_hub" "huggingface_hub" " (needed for model downloads)"
+    check_python "MAX" "max.engine" " (Modular inference engine, Linux/macOS only)"
     if [ "$(uname -s)" = "Darwin" ]; then
         check_python "MLX" "mlx.core"
     fi

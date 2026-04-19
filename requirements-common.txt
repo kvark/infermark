@@ -16,3 +16,7 @@ onnxscript  # required by torch.onnx.export(dynamo=True)
 llama-cpp-python
 faster-whisper
 gguf
+
+# MAX (Modular) — MLIR-based inference engine, Linux or macOS (Apple Silicon).
+# Not available on Windows; harmless to list — pip will simply not find it there.
+max
