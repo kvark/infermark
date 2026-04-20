@@ -74,7 +74,7 @@ the same model — flagged as **PASS**, **CLOSE**, or **DIFFERENT MODEL**.
 
 ```bash
 # Common (Vulkan for Burn, Meganeura)
-sudo apt install vulkan-tools libvulkan-dev glslc
+sudo apt install vulkan-tools libvulkan-dev glslc libssl-dev pkg-config
 
 # NVIDIA GPU:
 sudo apt install nvidia-driver-595          # driver (version may vary)
@@ -82,7 +82,17 @@ sudo apt install nvidia-cuda-toolkit        # nvcc — needed for Candle, Lumina
 # CUDA runtime libraries are provided by pip packages (nvidia-cublas-cu12, etc.)
 
 # AMD GPU:
-# sudo apt install rocm-libs                # ROCm runtime
+# sudo apt install rocm-dev libdrm-common librocm-core1
+# Some ROCm-built shared libs look for amdgpu.ids under /opt/amdgpu (AMD's
+# prefix), but Ubuntu installs it under /usr/share. Symlink once:
+#   sudo mkdir -p /opt/amdgpu/share/libdrm
+#   sudo ln -s /usr/share/libdrm/amdgpu.ids /opt/amdgpu/share/libdrm/amdgpu.ids
+# JAX's ROCm plugin hard-links rocprofiler-sdk + roctracer. On Ubuntu 26.04
+# (resolute) those aren't packaged yet — AMD's official apt repo ships them
+# only for noble/24.04. Without them JAX falls back to CPU; to get GPU JAX,
+# manually `dpkg -i` the `~24.04_amd64.deb` files from
+# https://repo.radeon.com/rocm/apt/7.1/pool/main/r/ for rocprofiler-register,
+# rocprofiler-sdk, roctracer, rocm-core (ROCm-compatible but unmanaged).
 
 # Intel GPU (Arc, Data Center GPU, Xe iGPU):
 # sudo apt install libze-intel-gpu1 libze1 intel-opencl-icd

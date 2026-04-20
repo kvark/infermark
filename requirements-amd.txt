@@ -1,8 +1,34 @@
+# Pull ROCm-enabled torch wheels. PyPI's default `torch` is now the CUDA
+# build (its metadata pulls in nvidia-cudnn-cu13, cuda-toolkit, etc.), and
+# its base version outranks rocm's local-versioned wheel — so `--extra-index-url`
+# alone isn't enough, we also pin exact versions from the ROCm channel.
+# Users on a different ROCm: swap `rocm7.1` and the pins to match your toolkit.
+--extra-index-url https://download.pytorch.org/whl/rocm7.1
+
+# AMD's manylinux index hosts onnxruntime-migraphx (ONNX Runtime with the
+# MIGraphXExecutionProvider). Plain `onnxruntime` from PyPI is CPU-only.
+--find-links https://repo.radeon.com/rocm/manylinux/rocm-rel-7.1/
+
 -r requirements-common.txt
 
 # AMD ROCm
-onnxruntime
-jax[rocm]
+torch==2.10.0+rocm7.1
+torchvision==0.25.0+rocm7.1
+# Pinned explicitly: when migrating a venv from the CUDA `torch` to the ROCm
+# one, pip's uninstall of the transitive nvidia `triton` removes files that
+# also belong to `triton-rocm`, leaving a half-empty `triton/` package.
+# Listing it here makes `pip install -r ... --force-reinstall --no-deps triton-rocm`
+# a one-liner if `import triton` ever misbehaves.
+triton-rocm
+# onnxruntime-migraphx conflicts with plain `onnxruntime` (both own the
+# `onnxruntime` module). If you previously installed CPU onnxruntime into
+# this venv, uninstall it before running pip install -r.
+onnxruntime-migraphx
+# JAX ROCm: the old `jax[rocm]` extra was replaced by a versioned plugin.
+# `rocm7-local` uses the host ROCm install rather than bundling libraries.
+# NOTE: the plugin hard-links against rocprofiler-sdk/roctracer libs that
+# Ubuntu 26.04 doesn't package yet — see the AMD section of the README.
+jax[rocm7-local]
 
 # Rebuild llama-cpp-python with Vulkan for AMD:
 #   CMAKE_ARGS="-DGGML_VULKAN=ON" pip install llama-cpp-python --force-reinstall --no-cache-dir

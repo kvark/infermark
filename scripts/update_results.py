@@ -150,23 +150,23 @@ def _platforms_match(a, b):
     na, nb = _normalize_platform(a), _normalize_platform(b)
     if na == nb:
         return True
+    wa, wb = set(na.split()), set(nb.split())
+    # Model-number tokens (any word containing a digit) are the primary
+    # discriminator: "Radeon 890M" and "Radeon RX 7900 XT" share "Radeon"
+    # but are different products, as are "RTX 5080" vs "RTX 3050", or
+    # "Apple M2" vs "Apple M3". If both sides specify a model number and
+    # none of them line up, it's a different machine — reject before the
+    # permissive substring/overlap fallbacks fire.
+    num_a = {w for w in wa if any(c.isdigit() for c in w)}
+    num_b = {w for w in wb if any(c.isdigit() for c in w)}
+    if num_a and num_b and not (num_a & num_b):
+        return False
     # Substring match on normalized names — handles short-vs-long forms like
-    # "M2" vs "Apple M2 Pro".
+    # "M2" vs "Apple M2 Pro". Reachable only when model numbers (if any) agree.
     if na in nb or nb in na:
         return True
-    # Word overlap: match if 2+ significant words overlap, UNLESS a numeric
-    # token differs. "NVIDIA GeForce RTX 5080" and "NVIDIA GeForce RTX 3050"
-    # share 3 words but are different products — the model number is the
-    # discriminator.
-    wa, wb = set(na.split()), set(nb.split())
-    overlap = wa & wb - {"@"}
-    if len(overlap) < 2:
-        return False
-    diff_a = {w for w in wa - wb if any(c.isdigit() for c in w)}
-    diff_b = {w for w in wb - wa if any(c.isdigit() for c in w)}
-    if diff_a or diff_b:
-        return False
-    return True
+    # Word overlap: match if 2+ significant words overlap.
+    return len(wa & wb - {"@"}) >= 2
 
 
 def merge_results(md_path, new_rows, platform_name):
