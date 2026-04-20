@@ -26,12 +26,17 @@ def main():
     from faster_whisper import WhisperModel
 
     # Auto-detect GPU: try CUDA first, fall back to CPU.
-    # Note: faster-whisper (CTranslate2) supports CUDA but not MPS/Metal.
+    # Note: faster-whisper (CTranslate2) supports only NVIDIA CUDA — no MPS,
+    # no Metal, and crucially no ROCm. PyTorch built against ROCm still
+    # reports torch.cuda.is_available()==True (it reuses the cuda namespace),
+    # so we have to check torch.version.hip explicitly to avoid handing
+    # device="cuda" to ctranslate2 on an AMD box — that path raises a
+    # misleading "CUDA driver version is insufficient" error.
     device = "cpu"
     compute_type = "float32"
     try:
         import torch
-        if torch.cuda.is_available():
+        if torch.cuda.is_available() and not torch.version.hip:
             device = "cuda"
             compute_type = "float16"
     except ImportError:

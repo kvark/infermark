@@ -83,7 +83,10 @@ print("yes" if llama_supports_gpu_offload() else "no")
             if [ "$(uname -s)" = "Darwin" ]; then
                 _CMAKE_BACKEND="-DGGML_METAL=ON"
             elif command -v vulkaninfo &>/dev/null && \
-                 dpkg-query -W -f='${Status}' libvulkan-dev 2>/dev/null | grep -q 'install ok installed'; then
+                 dpkg-query -W -f='${Status}' libvulkan-dev 2>/dev/null | grep -q 'install ok installed' && \
+                 command -v glslc &>/dev/null; then
+                # Vulkan rebuild needs glslc to compile shaders — without it
+                # cmake's FindVulkan fails and the rebuild would crash anyway.
                 _CMAKE_BACKEND="-DGGML_VULKAN=ON"
             elif command -v nvcc &>/dev/null || [ -d /usr/local/cuda ]; then
                 _CMAKE_BACKEND="-DGGML_CUDA=ON"

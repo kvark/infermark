@@ -23,6 +23,7 @@ links in the results tables always point to the exact revision tested.
 | [llama.cpp](https://github.com/ggml-org/llama.cpp) | C++ | CUDA / Metal / Vulkan / CPU |
 | [ONNX Runtime](https://github.com/microsoft/onnxruntime) | Python/C++ | CUDA / TensorRT / DirectML / CPU |
 | [JAX](https://github.com/jax-ml/jax) | Python | CUDA / TPU / CPU |
+| [MAX](https://github.com/modular/modular) | Python | CUDA / CPU |
 
 ## Platform support
 
@@ -31,6 +32,7 @@ links in the results tables always point to the exact revision tested.
 | PyTorch | CUDA, ROCm, XPU, CPU | MPS, CPU | CPU |
 | ONNX Runtime | CUDA, TensorRT, CPU | CoreML, CPU | DirectML, CPU |
 | JAX | CUDA, TPU, CPU | CPU | CPU |
+| MAX | CUDA, CPU | CPU | — |
 | Candle | CUDA, CPU | Metal, CPU | CPU |
 | Burn | Vulkan, CPU | Metal, CPU | — |
 | Luminal | CUDA, CPU | Metal, CPU | — |

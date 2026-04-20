@@ -67,11 +67,11 @@ Most frameworks (PyTorch, Meganeura, ONNX Runtime, JAX, MLX) run the **simplifie
 | | [ONNX Runtime](https://github.com/microsoft/onnxruntime) (CPUExecutionProvider) | ~~2.39~~ | ~~31~~ | ~~—~~ | ~~—~~ | ~~0.05~~ |
 | | [MAX](https://github.com/modular/modular) | ✗ | ✗ | ✗ | ✗ | |
 | | [JAX](https://github.com/jax-ml/jax) (CPU) | ~~4.85~~ | ~~73~~ | ~~—~~ | ~~206~~ | ~~0.05~~ |
-| AMD Radeon RX 7900 XT | [PyTorch 2.10.0+rocm7.1](https://github.com/pytorch/pytorch/releases/tag/v2.10.0) (ROCm 7.1.25424) | 11.17 | 1.7 | 1.5 | **3.3** | 0.50 |
+| AMD Radeon RX 7900 XT | [PyTorch 2.10.0+rocm7.1](https://github.com/pytorch/pytorch/releases/tag/v2.10.0) (ROCm 7.1.25424) | 11.06 | 1.7 | 1.5 | **3.3** | 0.50 |
 | | [Burn](https://github.com/tracel-ai/burn) | — | — | — | — | |
 | | [Inferi](https://github.com/dimforge/inferi) | ✗ | ✗ | ✗ | ✗ | |
 | | [Luminal](https://github.com/luminal-ai/luminal) | — | — | — | — | |
-| | [Meganeura](https://github.com/kvark/meganeura/tree/8042e00) (Vulkan) | **0.77** | **1.5** | **1.4** | 7.4 | 0.52 |
+| | [Meganeura](https://github.com/kvark/meganeura/tree/8042e00) (Vulkan) | **0.77** | **1.6** | **1.5** | 7.3 | 0.51 |
 | | [GGML](https://github.com/ggerganov/ggml) | — | — | — | — | |
 | | [MAX](https://github.com/modular/modular) | — | — | — | — | |
 
