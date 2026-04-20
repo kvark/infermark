@@ -66,12 +66,11 @@ Benchmark config: 30s mel spectrogram (80x3000), 4-token decoder input, float32,
 | | [ONNX Runtime](https://github.com/microsoft/onnxruntime) (CPUExecutionProvider) | 6.18 | **333** | — | — | 0.01 |
 | | [MAX](https://github.com/modular/modular) | ✗ | ✗ | ✗ | ✗ | |
 | | [JAX](https://github.com/jax-ml/jax) (CPU) | 5.59 | 717 | 686 | 2681 | 0.01 |
-| AMD Radeon RX 7900 XT | [PyTorch 2.10.0+rocm7.1](https://github.com/pytorch/pytorch/releases/tag/v2.10.0) (ROCm 7.1.25424) | 5.35 | 12 | 6.4 | 42 | 0.00 |
+| AMD Radeon RX 7900 XT | [PyTorch 2.10.0+rocm7.1](https://github.com/pytorch/pytorch/releases/tag/v2.10.0) (ROCm 7.1.25424) | 5.38 | 12 | 6.5 | 44 | 0.00 |
 | | [Burn](https://github.com/tracel-ai/burn) | — | — | — | — | |
 | | [Inferi](https://github.com/dimforge/inferi) | ✗ | ✗ | ✗ | ✗ | |
 | | [Luminal](https://github.com/luminal-ai/luminal) | — | — | — | — | |
 | | [Meganeura](https://github.com/kvark/meganeura/tree/8042e00) (Vulkan) | 0.82 | **4.8** | **4.8** | **21** | 0.01 |
-| | [GGML](https://github.com/ggerganov/ggml) | ✗ | ✗ | ✗ | ✗ | |
 | | [MAX](https://github.com/modular/modular) | — | — | — | — | |
 
 **Correctness:** PyTorch vs ONNX Runtime: **PASS** (loss diff 0.0).

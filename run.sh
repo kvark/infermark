@@ -549,3 +549,17 @@ for MODEL in $MODELS; do
         "$HARNESS" "${ARGS[@]}" || true
     fi
 done
+
+# --- Per-platform SVG chart ---
+# Always emitted (not gated on --update) so every run leaves a visual summary
+# of what the machine just produced. Uses the override if one was supplied,
+# otherwise defers to the script's own gpu_name extraction.
+CHART_PLATFORM="${PLATFORM:-}"
+if [ -z "$CHART_PLATFORM" ] && [ "$DRY_RUN" != true ]; then
+    CHART_PLATFORM=$(detect_platform)
+fi
+if [ "$DRY_RUN" != true ]; then
+    python3 "$ROOT_DIR/scripts/generate_chart.py" \
+        --results-dir "$ROOT_DIR/results" \
+        ${CHART_PLATFORM:+--platform "$CHART_PLATFORM"} || true
+fi

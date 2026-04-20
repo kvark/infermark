@@ -61,12 +61,12 @@ Benchmark config: seq_len=128, float32, input=[0,1,...,127].
 | | [ONNX Runtime](https://github.com/microsoft/onnxruntime) (CPUExecutionProvider) | ~~66.86~~ | ~~381~~ | ~~64~~ | ~~—~~ | ~~6.01~~ |
 | | [MAX](https://github.com/modular/modular) | ✗ | ✗ | ✗ | ✗ | |
 | | [JAX](https://github.com/jax-ml/jax) (CPU) | ~~9.97~~ | ~~589~~ | ~~176~~ | ~~1412~~ | ~~5.79~~ |
-| AMD Radeon RX 7900 XT | [PyTorch 2.10.0+rocm7.1](https://github.com/pytorch/pytorch/releases/tag/v2.10.0) (ROCm 7.1.25424) | 73.43 | 10 | 7.0 | 23 | 8.35 |
-| | [Burn](https://github.com/tracel-ai/burn/tree/ed72d2b) (wgpu/vulkan) | ~~0.00~~ | ~~169~~ | ~~26~~ | ~~134~~ | ~~11.56~~ |
+| AMD Radeon RX 7900 XT | [PyTorch 2.10.0+rocm7.1](https://github.com/pytorch/pytorch/releases/tag/v2.10.0) (ROCm 7.1.25424) | 73.03 | 10 | 6.8 | 23 | 8.35 |
+| | [Burn](https://github.com/tracel-ai/burn/tree/ed72d2b) (wgpu/vulkan) | ~~0.00~~ | ~~172~~ | ~~25~~ | ~~181~~ | ~~11.76~~ |
 | | [Inferi](https://github.com/dimforge/inferi) | ✗ | ✗ | ✗ | ✗ | |
-| | [Meganeura](https://github.com/kvark/meganeura/tree/8042e00) (Vulkan) | **1.24** | **7.3** | **2.0** | **20** | 8.64 |
-| | [GGML](https://github.com/ggerganov/ggml) | ✗ | ✗ | ✗ | ✗ | |
-| | [MAX](https://github.com/modular/modular) (GPU) | ~~2.72~~ | ~~4.1~~ | ~~0.1~~ | ~~—~~ | ~~10.80~~ |
+| | [Meganeura](https://github.com/kvark/meganeura/tree/8042e00) (Vulkan) | 0.99 | **7.3** | **2.1** | **21** | 8.64 |
+| | [GGML](https://github.com/ggerganov/ggml/tree/0.3.20) (ROCm) | **0.11** | 259 | 3.4 | — | 8.69 |
+| | [MAX](https://github.com/modular/modular) (GPU) | ~~2.13~~ | ~~3.5~~ | ~~0.1~~ | ~~—~~ | ~~10.80~~ |
 
 **Correctness:** PyTorch vs ONNX Runtime: **PASS** (loss diff 3.2e-3).
 PyTorch vs JAX: **PASS** (loss diff 3.2e-3).
