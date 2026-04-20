@@ -53,7 +53,12 @@ impl SimpleBackend for SinInit {
         Tensor::from_vec(data, s, dev)?.to_dtype(dtype)
     }
 
-    fn get_unchecked(&self, _name: &str, _dtype: DType, _dev: &Device) -> candle_core::Result<Tensor> {
+    fn get_unchecked(
+        &self,
+        _name: &str,
+        _dtype: DType,
+        _dev: &Device,
+    ) -> candle_core::Result<Tensor> {
         candle_core::bail!("SinInit requires a shape for tensor retrieval, use `get`")
     }
 

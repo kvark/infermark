@@ -86,6 +86,11 @@ struct Cli {
     /// Dry-run: validate framework+model support without running benchmarks.
     #[arg(long)]
     dry_run: bool,
+
+    /// Disable the default discrete-GPU preference (lets backends pick an
+    /// integrated GPU / APU if that's what their default selection returns).
+    #[arg(long)]
+    allow_integrated_gpu: bool,
 }
 
 fn all_frameworks() -> Vec<&'static str> {
@@ -215,7 +220,54 @@ fn project_root(cli_root: Option<&Path>) -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
-fn run_framework(root: &Path, framework: &str, model: &str, dry_run: bool) -> FrameworkOutcome {
+/// On Linux/Mesa, parse `vulkaninfo --summary` for the first DISCRETE_GPU and
+/// return its `vendorID:deviceID` pair (lowercase hex, no `0x`), shaped for
+/// `MESA_VK_DEVICE_SELECT`. Returns None if vulkaninfo is missing or no
+/// discrete device is visible — callers should then leave the env alone.
+fn discover_discrete_gpu_pci_id() -> Option<String> {
+    let output = Command::new("vulkaninfo").arg("--summary").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+
+    let extract_hex = |line: &str| -> Option<String> {
+        line.split('=')
+            .nth(1)?
+            .trim()
+            .strip_prefix("0x")
+            .map(|s| s.to_lowercase())
+    };
+
+    let mut vendor: Option<String> = None;
+    let mut device: Option<String> = None;
+    for line in text.lines() {
+        let t = line.trim();
+        if t.starts_with("GPU") && t.ends_with(':') {
+            vendor = None;
+            device = None;
+        } else if t.starts_with("vendorID") {
+            vendor = extract_hex(t);
+        } else if t.starts_with("deviceID") {
+            device = extract_hex(t);
+        } else if t.starts_with("deviceType")
+            && t.contains("DISCRETE_GPU")
+            && let (Some(v), Some(d)) = (vendor.as_ref(), device.as_ref())
+        {
+            return Some(format!("{v}:{d}"));
+        }
+    }
+    None
+}
+
+fn run_framework(
+    root: &Path,
+    framework: &str,
+    model: &str,
+    dry_run: bool,
+    prefer_discrete_gpu: bool,
+    discrete_gpu_pci_id: Option<&str>,
+) -> FrameworkOutcome {
     let fw_dir = root.join("frameworks").join(framework);
     let run_script = fw_dir.join("run.sh");
 
@@ -239,6 +291,21 @@ fn run_framework(root: &Path, framework: &str, model: &str, dry_run: bool) -> Fr
     cmd.arg(&run_script).arg(model).current_dir(&fw_dir);
     if dry_run {
         cmd.env("INFERENA_DRY_RUN", "1");
+    }
+    // Steer adapter selection at the discrete GPU on hybrid systems. wgpu's
+    // env-driven power preference is a soft hint; on Linux/Mesa we also set
+    // MESA_VK_DEVICE_SELECT, which filters adapters at the Vulkan loader so
+    // even frameworks that don't plumb env into request_adapter get the
+    // discrete device. Caller overrides win.
+    if prefer_discrete_gpu {
+        if std::env::var_os("WGPU_POWER_PREFERENCE").is_none() {
+            cmd.env("WGPU_POWER_PREFERENCE", "high");
+        }
+        if let Some(pci) = discrete_gpu_pci_id
+            && std::env::var_os("MESA_VK_DEVICE_SELECT").is_none()
+        {
+            cmd.env("MESA_VK_DEVICE_SELECT", pci);
+        }
     }
     let output = cmd.output();
 
@@ -626,9 +693,25 @@ fn main() {
         None => all_frameworks(),
     };
 
+    let prefer_discrete_gpu = !cli.allow_integrated_gpu;
+    let discrete_gpu_pci_id = if prefer_discrete_gpu && cfg!(target_os = "linux") {
+        discover_discrete_gpu_pci_id()
+    } else {
+        None
+    };
+    if let Some(pci) = &discrete_gpu_pci_id {
+        eprintln!("[inferena] pinning Vulkan to discrete GPU (MESA_VK_DEVICE_SELECT={pci})");
+    }
     let mut outcomes = Vec::new();
     for fw in &frameworks {
-        outcomes.push(run_framework(&root, fw, &cli.model, cli.dry_run));
+        outcomes.push(run_framework(
+            &root,
+            fw,
+            &cli.model,
+            cli.dry_run,
+            prefer_discrete_gpu,
+            discrete_gpu_pci_id.as_deref(),
+        ));
     }
 
     // Collect successful results for comparison.

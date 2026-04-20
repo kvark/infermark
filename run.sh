@@ -175,8 +175,24 @@ _detect_platform_raw() {
         return
     fi
     if command -v vulkaninfo &>/dev/null; then
+        # Prefer discrete GPU over integrated (APU) over anything else —
+        # `head -1` used to grab GPU0, which on hybrid AMD systems is the iGPU
+        # whose RADV deviceName is the parent CPU's product string.
         local vk_dev
-        vk_dev=$(vulkaninfo --summary 2>/dev/null | grep "deviceName" | head -1 | sed 's/.*= //' | xargs)
+        vk_dev=$(vulkaninfo --summary 2>/dev/null | awk '
+            /^GPU[0-9]+:/      { type=""; next }
+            /deviceType/       { type=$0; next }
+            /deviceName/ {
+                sub(/.*= /, "")
+                if      (type ~ /DISCRETE_GPU/   && !discrete)   discrete=$0
+                else if (type ~ /INTEGRATED_GPU/ && !integrated) integrated=$0
+                else if (!other)                                 other=$0
+            }
+            END {
+                if      (discrete)   print discrete
+                else if (integrated) print integrated
+                else if (other)      print other
+            }' | xargs)
         if [ -n "$vk_dev" ] && ! echo "$vk_dev" | grep -qi "llvmpipe\|lavapipe\|swrast"; then
             echo "$vk_dev"
             return
